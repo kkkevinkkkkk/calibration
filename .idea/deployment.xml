@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="yh386@127.0.0.1:12343 key (2)" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+    <option name="confirmBeforeUploading" value="false" />
+    <serverData>
+      <paths name="slurm">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/users/yh386/calibration" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh3310@communication.cs.columbia.edu:22 password">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$/../projects/transformers" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh3310@communication.cs.columbia.edu:22 password (1)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$/../projects/transformers" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh3310@multilingual.cs.columbia.edu:22">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$/../projects/transformers" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh3310@seahorse.cs.columbia.edu:22">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$/../projects/transformers" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh386@127.0.0.1:12343 key">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/users/yh386/calibration" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/users/yh386/packages/llama" local="$PROJECT_DIR$/../projects/llama" web="" />
+            <mapping deploy="/home/users/yh386/packages/transformers" local="$PROJECT_DIR$/../projects/transformers" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yh386@127.0.0.1:12343 key (2)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/users/yh386/calibration" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/users/yh386/packages" local="$PROJECT_DIR$/../projects/packages" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteMappingsManager">
+    <list>
+      <list>
+        <remote-mappings server-id="python@sftp://yh386@127.0.0.1:12343/usr/xtmp/yh386/miniconda3/envs/llm/bin/python3.11">
+          <settings>
+            <list>
+              <mapping local-root="$PROJECT_DIR$/../projects/transformers" remote-root="/home/users/yh386/packages/transformers" />
+            </list>
+          </settings>
+        </remote-mappings>
+      </list>
+    </list>
+  </component>
+</project>
