@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -68,5 +69,73 @@ def get_prompt(eval_item, dataset_name="asqa", ndoc=5):
         raise Exception
 
     return prompt
+
+
+def make_demo(item, prompt,
+              ndoc=None,
+              doc_prompt=None,
+              instruction=None,
+              use_shorter=None,
+              test=False):
+    # For demo prompt
+    # - {INST}: the instruction
+    # - {D}: the documents
+    # - {Q}: the question
+    # - {A}: the answers
+    # ndoc: number of documents to put in context
+    # use_shorter: None, "summary", or "extraction"
+
+    if instruction is None:
+        prompt = prompt.replace('{INST}\n\n', "")
+        prompt = prompt.replace("{Q}", item['question'])
+    else:
+        prompt = prompt.replace("{INST}", instruction).replace("{Q}", item['question'])
+    if "{D}" in prompt:
+        if ndoc == 0:
+            prompt = prompt.replace("{D}\n", "") # if there is no doc we also delete the empty line
+        else:
+            doc_list = get_shorter_text(item, item["docs"], ndoc, use_shorter) if use_shorter is not None else item["docs"][:ndoc]
+            text = "".join([make_doc_prompt(doc, doc_id, doc_prompt, use_shorter=use_shorter) for doc_id, doc in enumerate(doc_list)])
+            prompt = prompt.replace("{D}", text)
+
+    if not test:
+        answer = "\n" + "\n".join(item["answer"]) if isinstance(item["answer"], list) else item["answer"]
+        prompt = prompt.replace("{A}", "").rstrip() + answer
+    else:
+        prompt = prompt.replace("{A}", "").rstrip() # remove any space or \n
+
+    return prompt
+
+
+def make_head_prompt(prompt_data: dict,
+                     n_shot: int = 0,
+                     n_doc: int = 0,
+                     n_doc_in_demo: int = 0,
+                     fewer_doc_in_demo: bool = False,
+                     no_doc_in_demo: bool = True,
+                     use_shorter: str = "summary"
+                     ):
+    train_ids = np.random.choice(len(prompt_data["demos"]), n_shot, replace=False)
+    head_prompt = prompt_data["instruction"]
+    if n_shot > 0:
+        head_prompt += "Here are some examples:\n\n"
+
+    for train_id in train_ids:
+        train_item = prompt_data["demos"][train_id]
+        n_doc = n_doc
+        if no_doc_in_demo:
+            n_doc = 0
+        elif fewer_doc_in_demo:
+            assert n_doc_in_demo is not None
+            n_doc = n_doc_in_demo
+        head_prompt += make_demo(
+            train_item, prompt=prompt_data["demo_prompt"], ndoc=n_doc, doc_prompt=prompt_data["doc_prompt"],
+            instruction=None, use_shorter=use_shorter
+        )
+        head_prompt += prompt_data["demo_sep"]
+
+    head_prompt += "Now let's answer:\n\n"
+    return head_prompt
+
 
 

@@ -1,6 +1,7 @@
 from transformers import Pipeline, pipeline, TextGenerationPipeline
 import torch.nn.functional as F
 from transformers.pipelines.text_generation import ReturnType
+import torch
 
 
 class MyPipeline(TextGenerationPipeline):
