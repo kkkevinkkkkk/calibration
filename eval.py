@@ -227,6 +227,10 @@ def compute_qa(data):
             loc_f1 += max([compute_f1(a, prediction) for a in answers])
             loc_counter += 1
 
+        item["QA-EM"] = loc_em / loc_counter
+        item["QA-F1"] = loc_f1 / loc_counter
+        item["QA-Hit"] = loc_em == loc_counter
+
         em.append(loc_em / loc_counter)
         f1.append(loc_f1 / loc_counter)
         bins.append(loc_em == loc_counter)
@@ -234,7 +238,8 @@ def compute_qa(data):
     return {
         'QA-EM': 100 * np.mean(em),
         'QA-F1': 100 * np.mean(f1),
-        'QA-Hit': 100 * np.mean(bins)
+        'QA-Hit': 100 * np.mean(bins),
+        'data': data
     }
 
 
@@ -506,7 +511,7 @@ def main():
     logger.warning("We remove all the pre/appended space/newlines and we truncate the answer by the first newline.")
     logger.warning("We replace any on the fly search result to standard bracket citation format.")
     for i in range(len(data)):
-        data[i]['output'] = data[i]['output'].strip().split("\n")[0]
+        # data[i]['output'] = data[i]['output'].strip().split("\n")[0]
         data[i]['output'] = data[i]['output'].replace("<|im_end|>", "")
 
 
@@ -531,7 +536,9 @@ def main():
     if args.claims_nli:
         result["claims_nli"] = compute_claims(normalized_data)
 
-    print(result)
+    for k, v in result.items():
+        if k != "data":
+            print(f"{k}:{v}")
     json.dump(result, open(args.f + ".score", "w"), indent=4)
 
 

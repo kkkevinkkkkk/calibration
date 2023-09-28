@@ -55,10 +55,10 @@ def get_shorter_text(item, docs, ndoc, key):
     return doc_list
 
 
-def get_prompt(eval_item, dataset_name="asqa", ndoc=5):
+def make_chat_prompt(eval_item, dataset_name="asqa", ndoc=5):
     template = templates[dataset_name]
     if dataset_name == "asqa":
-        question = eval_item["ambiguous_question"]
+        question = eval_item["question"]
         prompt = template.format(question=question)
     elif dataset_name == "eli5":
         question = eval_item["question"]
@@ -71,13 +71,13 @@ def get_prompt(eval_item, dataset_name="asqa", ndoc=5):
     return prompt
 
 
-def make_demo(item, prompt,
+def make_demo(item, template,
               ndoc=None,
               doc_prompt=None,
               instruction=None,
               use_shorter=None,
               test=False):
-    # For demo prompt
+    # For demo template
     # - {INST}: the instruction
     # - {D}: the documents
     # - {Q}: the question
@@ -86,10 +86,10 @@ def make_demo(item, prompt,
     # use_shorter: None, "summary", or "extraction"
 
     if instruction is None:
-        prompt = prompt.replace('{INST}\n\n', "")
+        prompt = template.replace('{INST}\n\n', "")
         prompt = prompt.replace("{Q}", item['question'])
     else:
-        prompt = prompt.replace("{INST}", instruction).replace("{Q}", item['question'])
+        prompt = template.replace("{INST}", instruction).replace("{Q}", item['question'])
     if "{D}" in prompt:
         if ndoc == 0:
             prompt = prompt.replace("{D}\n", "") # if there is no doc we also delete the empty line
@@ -113,7 +113,7 @@ def make_head_prompt(prompt_data: dict,
                      n_doc_in_demo: int = 0,
                      fewer_doc_in_demo: bool = False,
                      no_doc_in_demo: bool = True,
-                     use_shorter: str = "summary"
+                     use_shorter: str = "summary",
                      ):
     train_ids = np.random.choice(len(prompt_data["demos"]), n_shot, replace=False)
     head_prompt = prompt_data["instruction"]
@@ -129,13 +129,39 @@ def make_head_prompt(prompt_data: dict,
             assert n_doc_in_demo is not None
             n_doc = n_doc_in_demo
         head_prompt += make_demo(
-            train_item, prompt=prompt_data["demo_prompt"], ndoc=n_doc, doc_prompt=prompt_data["doc_prompt"],
+            train_item, template=prompt_data["demo_prompt"], ndoc=n_doc, doc_prompt=prompt_data["doc_prompt"],
             instruction=None, use_shorter=use_shorter
         )
         head_prompt += prompt_data["demo_sep"]
 
     head_prompt += "Now let's answer:\n\n"
     return head_prompt
+
+def make_text_input(
+        eval_item: dict,
+        head_prompt: str = None,
+        model_name: str = "llama-7b-hf",
+        n_doc: int = 0,
+        template: str = None,
+        doc_prompt: str = None,
+        instruction: str = None,
+        use_shorter: str = "summary",
+        test: bool = True,
+        dataset_name: str = "asqa",
+                ):
+    if "chat" in model_name:
+        text_input = make_chat_prompt(eval_item, dataset_name, ndoc=n_doc)
+    else:
+        text_input = head_prompt + make_demo(
+            eval_item,
+            template=template,
+            ndoc=n_doc,
+            doc_prompt=doc_prompt,
+            instruction=None,
+            use_shorter=use_shorter,
+            test=True
+        )
+    return text_input
 
 
 

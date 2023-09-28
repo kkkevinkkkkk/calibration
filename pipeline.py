@@ -2,11 +2,30 @@ from transformers import Pipeline, pipeline, TextGenerationPipeline
 import torch.nn.functional as F
 from transformers.pipelines.text_generation import ReturnType
 import torch
+import transformers
+import openai
+import os
+
+OPENAI_MODELS =["gpt-4", "gpt-3.5-turbo"]
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
+def pipeline_init(**kwargs):
+    if kwargs["model"] in OPENAI_MODELS:
+        return MyPipeline(**kwargs)
+    else:
+        return transformers.pipeline(**kwargs)
 
 
 class MyPipeline(TextGenerationPipeline):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        self.model_name = kwargs["model"]
+        self.openai = True if self.model_name in OPENAI_MODELS else False
+        if not self.openai:
+            super().__init__(*args, **kwargs)
+
+        print(args)
+        print()
 
     def _forward(self, model_inputs, **generate_kwargs):
         input_ids = model_inputs["input_ids"]
@@ -99,7 +118,27 @@ class MyPipeline(TextGenerationPipeline):
                     all_text = prompt_text + all_text
 
                 record = {"generated_text": all_text, "tokens_probs": tokens_probs,
-                          "seq_log_prob": seq_log_prob, "full_text": full_text}
+                          "seq_log_prob": seq_log_prob.item(), "full_text": full_text}
             records.append(record)
 
         return records
+
+    def get_openai_completion(self, prompt, temperature=0):
+        messages = [{"role": "user", "content": prompt}]
+
+        response = openai.ChatCompletion.create(
+            model=self.model_name,
+            messages=messages,
+            temperature=temperature,)
+        output = response.choices[0].message["content"]
+        records = [{"generated_text": output, "tokens_probs": 0,
+                          "seq_log_prob": 0, "full_text": prompt + "\n" + output}]
+        return records
+
+
+    def __call__(self, inputs, *args, num_workers=None, batch_size=None, **kwargs):
+        if self.openai:
+            return self.get_openai_completion(inputs)
+        else:
+            records = super().__call__(inputs, **kwargs)
+            return records
