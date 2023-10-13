@@ -8,6 +8,18 @@ import re
 import os
 import string
 import time
+import pickle
+
+def save_list(l, save_path):
+    with open(save_path, "wb") as fp:
+        pickle.dump(l, fp)
+        print(f"save to {save_path}")
+
+def load_list(load_path):
+    with open(load_path, "rb") as fp:  # Unpickling
+        l = pickle.load(fp)
+        print(f"load from {load_path}")
+    return l
 
 def normalize_answer(s):
     def remove_articles(text):

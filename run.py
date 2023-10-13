@@ -5,10 +5,10 @@ import os
 import json
 import numpy as np
 
-from pipeline import MyPipeline, OPENAI_MODELS, pipeline_init
+from pipeline import MyPipeline, OPENAI_MODELS, pipeline_init, SelfEvalPipeline
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
-from utils import make_demo, make_head_prompt, make_text_input
+from utils import make_head_prompt, make_text_input
 from tqdm import tqdm
 
 
@@ -22,13 +22,19 @@ def main(
 
     tokenizer = AutoTokenizer.from_pretrained(model) if model not in OPENAI_MODELS else None
     eos_token_id = tokenizer.eos_token_id if model not in OPENAI_MODELS else 0
-
+    confidence_method = args.get("confidence_method", "None")
+    confidence_to_pipeline = {
+        "None": MyPipeline,
+        "self_verification": SelfEvalPipeline,
+        "log_prob": MyPipeline
+    }
     pipeline = pipeline_init(
         task="text-generation",
         model=model,
         torch_dtype=torch.float16,
         device_map="auto",
-        pipeline_class=MyPipeline,
+        pipeline_class=confidence_to_pipeline[confidence_method],
+        model_name=model,
     )
 
     # Generate prompts
@@ -43,7 +49,6 @@ def main(
         eval_data = eval_data[:args.sample_num]
     else:
         args.sample_num = len(eval_data)
-
 
 
     head_prompt = make_head_prompt(prompt_data,
@@ -81,10 +86,13 @@ def main(
             max_length=2048,
         )
 
-        eval_item["output"] = sequences[0]["generated_text"]
-        eval_item["seq_log_prob"] = sequences[0]["seq_log_prob"]
-
-        # eval_item['output'] = output_array if len(output_array) > 1 else output_array[0]
+        # eval_item["output"] = sequences[0]["generated_text"]
+        # eval_item["seq_log_prob"] = sequences[0]["seq_log_prob"]
+        eval_item.update(sequences[0])
+        confidence_output = pipeline.extract_confidence_score(answer=eval_item["generated_text"],
+                                                              question=eval_item["question"],
+                                                              dataset_name=args.dataset_name)
+        eval_item.update(confidence_output)
 
     model_name = args.model.split("/")[-1]
     save_dir = os.path.join(args.save_dir, f"results/{args.exp_name}/{args.dataset_name}")

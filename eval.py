@@ -12,6 +12,8 @@ from rouge_score import rouge_scorer, scoring
 from tqdm import tqdm
 import sys
 import logging
+from pipeline import GraderPipeline, pipeline_init
+
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S')
 logger = logging.getLogger(__name__)
@@ -239,6 +241,65 @@ def compute_qa(data):
         'QA-EM': 100 * np.mean(em),
         'QA-F1': 100 * np.mean(f1),
         'QA-Hit': 100 * np.mean(bins),
+        'data': data
+    }
+
+
+def compute_gpt_score(data, model_name="gpt-3.5-turbo", dataset_name="asqa", generation_times=5):
+    """Compute GPT4 score.
+    Args:
+        data: requires filed `qa_pairs/short_answers` and `output`
+    Returns:
+        QA metrics (QA-EM, QA-F1, QA-Hit)
+    """
+
+    if model_name == "gpt-4":
+        generation_times = 1
+    # Load model
+    pipeline = pipeline_init(
+        model=model_name,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        pipeline_class=GraderPipeline,
+        output_scores=True
+    )
+
+    # Get prediction
+    logger.info(f"{model_name} evaluating...")
+    scores = []
+    fact_scores = []
+
+    for item in tqdm(data):
+        local_scores, local_fact_scores = [], []
+        for t in range(generation_times):
+            question, gold_answer, answer = item["question"], item["answer"], item["output"]
+            outputs = pipeline.evaluate_answer(question=question,
+                                               gold_answer=gold_answer,
+                                               answer=answer,
+                                               dataset_name=dataset_name,
+                                               temperature=0.3)
+
+            item[f"{model_name}_comment_{t}"] = outputs["comment"]
+            item[f"{model_name}_score_{t}"] = outputs["score"]
+            item[f"{model_name}_fact_comment_{t}"] = outputs["fact_comment"]
+            item[f"{model_name}_fact_score_{t}"] = outputs["fact_score"]
+            local_scores.append(outputs["score"])
+            local_fact_scores.append(outputs["fact_score"])
+
+        item[f"{model_name}_comment"] = outputs["comment"]
+        item[f"{model_name}_score"] = np.mean(local_scores)
+        item[f"{model_name}_score_std"] = np.std(local_scores)
+
+        item[f"{model_name}_fact_comment"] = outputs["fact_comment"]
+        item[f"{model_name}_fact_score"] = np.mean(local_fact_scores)
+        item[f"{model_name}_fact_score_std"] = np.std(local_fact_scores)
+
+        scores.append(np.mean(local_scores))
+        fact_scores.append(np.mean(local_fact_scores))
+
+    return {
+        f'{model_name}_score': np.mean(scores),
+        f'{model_name}_fact_score': np.mean(fact_scores),
         'data': data
     }
 
@@ -487,6 +548,8 @@ def main():
     parser.add_argument("--citations", action="store_true", help="Evaluation with citation")
     parser.add_argument("--at_most_citations", type=int, default=3, help="At most take this many documents (mostly for precision)")
     parser.add_argument("--claims_nli", action="store_true", help="Use claims for ELI5")
+    parser.add_argument("--gpt4", action="store_true", help="Use GPT4 to evaluate")
+    parser.add_argument("--gpt3_5", action="store_true", help="Use GPT4 to evaluate")
 
     # QAMPARI
     parser.add_argument("--cot", action="store_true", help="For QAMPARI, try to find colon and separate the COT and answer listing")
@@ -521,6 +584,7 @@ def main():
         normalized_data[i]['output'] = remove_citations(normalized_data[i]['output'])
 
     result = {}
+    metrics = []
     result['length'] = compute_len(normalized_data)
     result['str_em'], result['str_hit'] = compute_str_em(normalized_data)
     if qampari:
@@ -529,8 +593,17 @@ def main():
         result['rougeLsum'] = compute_rouge(normalized_data)
     if args.qa:
         result.update(compute_qa(normalized_data))
+        metrics.append("qa")
+    if args.gpt3_5:
+        result.update(compute_gpt_score(normalized_data))
+        metrics.append("gpt-3.5")
+    if args.gpt4:
+        result.update(compute_gpt_score(normalized_data, model_name="gpt-4"))
+        metrics.append("gpt-4")
+
     if args.mauve:
         result['mauve'] = compute_mauve(normalized_data)
+        metrics.append("mauve")
     if args.citations: 
         result.update(compute_autoais(data, qampari=qampari, at_most_citations=args.at_most_citations))
     if args.claims_nli:
@@ -539,7 +612,12 @@ def main():
     for k, v in result.items():
         if k != "data":
             print(f"{k}:{v}")
-    json.dump(result, open(args.f + ".score", "w"), indent=4)
+
+    metric_str = "_".join(metrics)
+    result_path = args.f + f".{metric_str}" + ".score"
+
+    json.dump(result, open(result_path, "w"), indent=4)
+    print(f"Save score file to {result_path}")
 
 
 if __name__ == "__main__":
