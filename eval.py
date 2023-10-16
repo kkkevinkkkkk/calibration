@@ -12,7 +12,7 @@ from rouge_score import rouge_scorer, scoring
 from tqdm import tqdm
 import sys
 import logging
-from pipeline import GraderPipeline, pipeline_init
+from pipeline import EvaluationPipeline, pipeline_init
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S')
@@ -260,7 +260,7 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo", dataset_name="asqa", gen
         model=model_name,
         torch_dtype=torch.float16,
         device_map="auto",
-        pipeline_class=GraderPipeline,
+        pipeline_class=EvaluationPipeline,
         output_scores=True
     )
 

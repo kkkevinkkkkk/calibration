@@ -5,11 +5,15 @@ import os
 import json
 import numpy as np
 
-from pipeline import MyPipeline, OPENAI_MODELS, pipeline_init, SelfEvalPipeline
+from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, SelfEvalPipeline,
+                      SelfRepetitionPipeline, SelfRepetitionSplitPipeline,
+                      RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
 from utils import make_head_prompt, make_text_input
 from tqdm import tqdm
+import sys
+import logging
 
 
 def main(
@@ -26,8 +30,15 @@ def main(
     confidence_to_pipeline = {
         "None": MyPipeline,
         "self_verification": SelfEvalPipeline,
-        "log_prob": MyPipeline
+        "log_prob": MyPipeline,
+        "self_repetition": SelfRepetitionPipeline,
+        "self_repetition_split": SelfRepetitionSplitPipeline,
+        "rephrase_consistency": RephraseConsistencyPipeline,
+        "rephrase_answer_consistency": RephraseAnswerConsistencyPipeline,
     }
+
+    num_return_sequences = 10 if "self_repetition" in confidence_method else 1
+
     pipeline = pipeline_init(
         task="text-generation",
         model=model,
@@ -59,20 +70,23 @@ def main(
                                    no_doc_in_demo=args.no_doc_in_demo,
                                    use_shorter=args.use_shorter,)
 
+
     for idx, eval_item in tqdm(enumerate(eval_data)):
+        prompt_kwargs = dict(
+            head_prompt=head_prompt,
+            model_name=args.model,
+            n_doc=args.n_doc,
+            template=prompt_data["demo_prompt"],
+            doc_prompt=prompt_data["doc_prompt"],
+            instruction=None,
+            use_shorter=args.use_shorter,
+            test=True,
+            dataset_name=args.dataset_name
+        )
         text_input = make_text_input(eval_item,
-                                     head_prompt=head_prompt,
-                                     model_name=args.model,
-                                     n_doc=args.n_doc,
-                                     template=prompt_data["demo_prompt"],
-                                     doc_prompt=prompt_data["doc_prompt"],
-                                     instruction=None,
-                                     use_shorter=args.use_shorter,
-                                     test=True,
-                                     dataset_name=args.dataset_name)
+                                     **prompt_kwargs)
 
         eval_data[idx]['text_input'] = text_input
-        # eval_data[idx]['prompt'] = text_input
 
         if idx == 0:
             print(text_input)
@@ -81,17 +95,23 @@ def main(
             text_input,
             do_sample=True,
             top_k=10,
-            num_return_sequences=1,
+            num_return_sequences=num_return_sequences,
             eos_token_id=eos_token_id,
             max_length=2048,
+            random_state=args.seed
         )
 
-        # eval_item["output"] = sequences[0]["generated_text"]
-        # eval_item["seq_log_prob"] = sequences[0]["seq_log_prob"]
+
         eval_item.update(sequences[0])
+        other_answers = [item["generated_text"] for item in sequences[1:]]
+
         confidence_output = pipeline.extract_confidence_score(answer=eval_item["generated_text"],
                                                               question=eval_item["question"],
-                                                              dataset_name=args.dataset_name)
+                                                              dataset_name=args.dataset_name,
+                                                              other_answers=other_answers,
+                                                              prompt_func=make_text_input,
+                                                              prompt_kwargs=prompt_kwargs,
+                                                              )
         eval_item.update(confidence_output)
 
     model_name = args.model.split("/")[-1]
@@ -104,7 +124,6 @@ def main(
     with open(save_path, 'w') as f:
         json.dump(eval_data, f)
         print(f"save to {save_path}")
-
 
 if __name__ == '__main__':
     fire.Fire(main)

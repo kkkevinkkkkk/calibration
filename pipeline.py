@@ -10,8 +10,12 @@ from retry import retry
 from openai.error import Timeout, APIError, ServiceUnavailableError
 from omegaconf import DictConfig
 from nltk.corpus import stopwords
+from nltk import sent_tokenize
 from string import punctuation
 import numpy as np
+
+from utils import TEMPLATES
+
 from omegaconf import OmegaConf
 OPENAI_MODELS =["gpt-4", "gpt-3.5-turbo"]
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -22,19 +26,6 @@ def pipeline_init(**kwargs):
         return kwargs["pipeline_class"](**kwargs)
     else:
         return transformers.pipeline(**kwargs)
-
-# class Record(DictConfig):
-#     def __init__(self, generated_sequence=None,
-#                  seq_log_prob=0,
-#                  full_text="",
-#                  **kwargs):
-#         d = {
-#             "generated_sequence": generated_sequence,
-#             "seq_log_prob": seq_log_prob,
-#             "full_text": full_text
-#         }
-#         d = dict(**kwargs, **d)
-#         super().__init__(d)
 
 def Record(generated_text=None,
                  seq_log_prob=0,
@@ -56,7 +47,6 @@ class MyPipeline(TextGenerationPipeline):
             super().__init__(*args, **kwargs)
             self._forward_params = {}
 
-        print(args)
 
     def _forward(self, model_inputs, **generate_kwargs):
         input_ids = model_inputs["input_ids"]
@@ -179,16 +169,17 @@ class MyPipeline(TextGenerationPipeline):
 
         return records
     @retry((Timeout, APIError,ServiceUnavailableError), tries=5, delay=1, backoff=2, max_delay=4)
-    def get_openai_completion(self, prompt, temperature=0):
+    def get_openai_completion(self, prompt, temperature=0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
+        model_name = model_name if model_name is not None else self.model_name
 
         response = openai.ChatCompletion.create(
-            model=self.model_name,
+            model=model_name,
             messages=messages,
             temperature=temperature,)
         output = response.choices[0].message["content"]
 
-        record = Record({"generated_text": output,
+        record = Record(**{"generated_text": output,
                           "seq_log_prob": 0, "full_text": prompt + "\n" + output,
                          "output": output})
         records = [record]
@@ -202,10 +193,13 @@ class MyPipeline(TextGenerationPipeline):
         score = int(match.group(1)) if match else 0
         return score
 
-    def __call__(self, inputs, *args, temperature=0, num_workers=None, batch_size=None, **kwargs):
+    def __call__(self, inputs, *args, temperature=0,
+                 num_workers=None, batch_size=None, random_state=1, **kwargs):
+
         if self.openai:
             return self.get_openai_completion(inputs, temperature=temperature)
         else:
+            torch.cuda.manual_seed(random_state)
             records = super().__call__(inputs, **kwargs)
             return records
 
@@ -214,21 +208,11 @@ class MyPipeline(TextGenerationPipeline):
         return output
 
 
-SELF_EVAL_TEMPLATE_CHAT = '''<s>[INST] You will be given a question and your own answer to the question. Please evaluate your own answer and provide a score from 0-100. After that, provide your confidence score about your evaluation.
-
-Question: {question}
-
-Your answer: {answer}
-
-Now please provide your score about this answer in the format of "Correctness Score: <Your score>/100" and give your explanation. After that, provide your confidence about your evaluation in the format of "Confidence Score: <Your score>/100" and give your explanation.[/INST]
-'''
-
-
 class SelfEvalPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "chat" in self.model_name:
-            self.template = SELF_EVAL_TEMPLATE_CHAT
+            self.template = TEMPLATES["chat"]["self_eval"]
         else:
             raise Exception
 
@@ -257,45 +241,23 @@ class SelfEvalPipeline(MyPipeline):
         return output
 
 
-
-
-GRADER_TEMPLATE = '''{task_instruction}
-
-{grader_instruction}
-
-Question: {question}
-
-Gold Answer: {gold_answer}
-
-Student's answer: {answer}
-
-Now please provide your score about this answer in the format of "Score: <Your score>/100" and give your explanation.
-'''
-FACT_GRADER_TEMPLATE = '''You will be given a student's answer and please evaluate the answer for its factuality.
-
-Student's answer: {answer}
-
-Now please provide your score about this answer in the format of "Score: <Your score>/100" and give your explanation.
-'''
-
-
-class GraderPipeline(MyPipeline):
+class EvaluationPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.grader_template = GRADER_TEMPLATE
-        self.fact_grader_template = FACT_GRADER_TEMPLATE
-        self.grader_instruction = "You will be given a question, a gold answer, and a student's answer. Please evaluate the student's answer based on the gold answer, and provide a score from 0-100 to the student's answer."
+        self.eval_template = TEMPLATES["openai"]["eval"]
+        self.fact_eval_template = TEMPLATES["openai"]["fact_eval"]
+        self.eval_instruction = "You will be given a question, a gold answer, and a student's answer. Please evaluate the student's answer based on the gold answer, and provide a score from 0-100 to the student's answer."
         self.asqa_instruction = "Given an ambiguous factoid question that has different correct answers depending on interpretation, the answer should be a long-form summary that resolves the ambiguity. "
 
     def fit_template(self, answer, question="", gold_answer="", eval_fact=False):
         if not eval_fact:
-            prompt = self.grader_template.format(task_instruction=self.asqa_instruction,
-                                                 grader_instruction=self.grader_instruction,
+            prompt = self.eval_template.format(task_instruction=self.asqa_instruction,
+                                                 eval_instruction=self.eval_instruction,
                                                  question=question,
                                                  gold_answer=gold_answer,
                                                  answer=answer)
         else:
-            prompt = self.fact_grader_template.format(answer=answer)
+            prompt = self.fact_eval_template.format(answer=answer)
         # print(prompt)
         return prompt
 
@@ -312,13 +274,166 @@ class GraderPipeline(MyPipeline):
         fact_score = self.extract_score(fact_comment)
 
         output = {
-            "inputs_grader": inputs,
+            "inputs_eval": inputs,
             "comment": comment,
             "score": score,
-            "fact_inputs_grader": fact_inputs,
+            "fact_inputs_eval": fact_inputs,
             "fact_comment": fact_comment,
             "fact_score": fact_score
         }
         return output
 
 
+class SelfRepetitionPipeline(MyPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def __call__(self, inputs, *args, temperature=0,
+                 num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
+        sequences = []
+        for i in range(num_return_sequences):
+            outputs = super().__call__(inputs, *args, temperature=temperature,
+                                       num_workers=num_workers, batch_size=batch_size,
+                                       num_return_sequences=1, random_state=random_state+i, **kwargs)
+            sequences.append(outputs[0])
+        return sequences
+
+
+    @staticmethod
+    def extract_score(text, pattern=r"Similarity score: (\d+)/5"):
+        match = re.search(pattern, text)
+        if not match:
+            print("Warning!!!", text)
+        score = int(match.group(1)) if match else 0
+        score *= 20
+        return score
+
+    def evaluate_repetition(self, answer1, answer2, question, **kwargs):
+        inputs = TEMPLATES["openai"]["repetition"].format(question=question, answer1=answer1, answer2=answer2)
+        # outputs = self.__call__(inputs, **kwargs)
+        outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+        comment = outputs[0]["generated_text"]
+        score = self.extract_score(comment)
+
+        output = {
+            "inputs": inputs,
+            "comment": comment,
+            "score": score,
+        }
+        return output
+
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None, **kwargs):
+        scores = []
+        outputs = {}
+        for i, answer_ in enumerate(other_answers):
+            output = self.evaluate_repetition(answer, answer_, question)
+            scores.append(output["score"])
+            outputs["inputs_repetition" + str(i)] = output["inputs"]
+            outputs["comment_repetition" + str(i)] = output["comment"]
+            outputs["score_repetition" + str(i)] = output["score"]
+
+        total_score = np.mean(scores)
+        outputs["score_repetition"] = total_score
+        return outputs
+
+class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def evaluate_repetition(self, answer1, answer2, question=None, **kwargs):
+        sentences = sent_tokenize(answer1)
+        sentence_hit = 0
+        for sentence in sentences:
+            inputs = TEMPLATES["openai"]["repetition_split"].format(sentence=sentence, response=answer2)
+            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+            comment = outputs[0]["generated_text"]
+            if "yes" in comment.lower():
+                sentence_hit += 1
+        score = sentence_hit / len(sentences) * 100
+
+        output = {
+            "score": score,
+        }
+        return output
+
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None, **kwargs):
+        scores = []
+        outputs = {}
+        for i, answer_ in enumerate(other_answers):
+            output = self.evaluate_repetition(answer, answer_, question)
+            scores.append(output["score"])
+            outputs["score_repetition_split" + str(i)] = output["score"]
+
+        total_score = np.mean(scores)
+        outputs["score_repetition_split"] = total_score
+        return outputs
+
+
+class RephraseConsistencyPipeline(MyPipeline):
+    def __init__(self, *args, rephrase_num=10, **kwargs):
+        self.rephrase_num = rephrase_num
+        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def extract_questions(text, pattern=r'Question \d+: (.+?)\n'):
+        matches = re.findall(pattern, text)
+        questions = [match for match in matches]
+        if len(questions) == 10:
+            print(f"warning!!! There are only {len(questions)} generated rephrased questions")
+        return questions
+
+    def rephrase_question(self, question, temperature=0, **kwargs):
+        inputs = TEMPLATES["chat"]["question_rephrase"].format(question=question, rephrase_num=self.rephrase_num)
+        outputs = self.__call__(inputs, temperature=temperature, **kwargs)
+        comment = outputs[0]["generated_text"]
+        questions = self.extract_questions(comment)
+        return questions
+
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, **kwargs):
+        questions = self.rephrase_question(question, temperature=temperature)
+        scores = []
+        for question_ in questions:
+            inputs = TEMPLATES["openai"]["compare_questions"].format(question1=question, question2=question_)
+            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+            comment = outputs[0]["generated_text"]
+            if comment.lower() == "yes":
+                scores.append(1)
+            elif comment.lower() == "no":
+                scores.append(0)
+            else:
+                scores.append(0)
+                print("warning!!! Didn't find yes or no in comment:", comment)
+
+        total_score = np.mean(scores) * 100
+        return {"score_rephrase_consistency": total_score, "rephrased_questions": questions}
+
+
+class RephraseAnswerConsistencyPipeline(RephraseConsistencyPipeline, SelfRepetitionSplitPipeline):
+    def __init__(self, *args, rephrase_num=10, **kwargs):
+        self.rephrase_num = rephrase_num
+        super().__init__(*args, **kwargs)
+
+    def extract_confidence_score(self, answer, question,
+                                 dataset_name="asqa",
+                                 temperature=0,
+                                 prompt_func=None,
+                                 prompt_kwargs={},
+                                 **kwargs):
+        questions = self.rephrase_question(question, temperature=temperature)
+        scores = []
+        answers_ = []
+        for question_ in questions:
+            inputs = prompt_func({"question": question_}, **prompt_kwargs)
+            outputs = self.__call__(inputs, temperature=temperature)
+            answer_ = outputs[0]["generated_text"]
+            answers_.append(answer_)
+
+        for answer_ in answers_:
+            score = self.evaluate_repetition(answer, answer_)["score"]
+            scores.append(score)
+
+
+        total_score = np.mean(scores) * 100
+        return {"score_rephrase_answer_consistency": total_score,
+                "rephrased_questions": questions, "answers": answers_}

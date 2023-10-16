@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from .templates import templates
+from .templates import TEMPLATES
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -39,7 +39,7 @@ def get_shorter_text(item, docs, ndoc, key):
 
 
 def make_chat_prompt(eval_item, dataset_name="asqa", ndoc=5):
-    template = templates[dataset_name]
+    template = TEMPLATES["chat"][dataset_name]
     if dataset_name == "asqa":
         question = eval_item["question"]
         prompt = template.format(question=question)
