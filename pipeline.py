@@ -1,4 +1,4 @@
-from transformers import Pipeline, pipeline, TextGenerationPipeline
+from transformers import pipeline, TextGenerationPipeline, AutoModelForTokenClassification, AutoTokenizer
 import torch.nn.functional as F
 from transformers.pipelines.text_generation import ReturnType
 import torch
@@ -14,7 +14,8 @@ from nltk import sent_tokenize
 from string import punctuation
 import numpy as np
 
-from utils import TEMPLATES
+from utils import TEMPLATES, NERModel
+from collections import defaultdict
 
 from omegaconf import OmegaConf
 OPENAI_MODELS =["gpt-4", "gpt-3.5-turbo"]
@@ -43,6 +44,13 @@ class MyPipeline(TextGenerationPipeline):
     def __init__(self, *args, **kwargs):
         self.model_name = kwargs["model_name"] if "model_name" in kwargs else kwargs["model"]
         self.openai = True if self.model_name in OPENAI_MODELS else False
+        if "vicuna" in self.model_name:
+            self.model_type = "vicuna"
+        elif "chat" in self.model_name:
+            self.model_type = "chat"
+        else:
+            self.model_type = "openai"
+
         if not self.openai:
             super().__init__(*args, **kwargs)
             self._forward_params = {}
@@ -184,6 +192,21 @@ class MyPipeline(TextGenerationPipeline):
                          "output": output})
         records = [record]
         return records
+    @staticmethod
+    def get_openai_completion_static(prompt, temperature=0, model_name=None):
+        messages = [{"role": "user", "content": prompt}]
+
+        response = openai.ChatCompletion.create(
+            model=model_name,
+            messages=messages,
+            temperature=temperature, )
+        output = response.choices[0].message["content"]
+
+        record = Record(**{"generated_text": output,
+                           "seq_log_prob": 0, "full_text": prompt + "\n" + output,
+                           "output": output})
+        records = [record]
+        return records
 
     @staticmethod
     def extract_score(text, pattern=r"(\d+)/100"):
@@ -258,7 +281,7 @@ class EvaluationPipeline(MyPipeline):
                                                  answer=answer)
         else:
             prompt = self.fact_eval_template.format(answer=answer)
-        # print(prompt)
+
         return prompt
 
 
@@ -311,8 +334,7 @@ class SelfRepetitionPipeline(MyPipeline):
 
     def evaluate_repetition(self, answer1, answer2, question, **kwargs):
         inputs = TEMPLATES["openai"]["repetition"].format(question=question, answer1=answer1, answer2=answer2)
-        # outputs = self.__call__(inputs, **kwargs)
-        outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+        outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
         comment = outputs[0]["generated_text"]
         score = self.extract_score(comment)
 
@@ -335,6 +357,7 @@ class SelfRepetitionPipeline(MyPipeline):
 
         total_score = np.mean(scores)
         outputs["score_repetition"] = total_score
+        outputs["other_answers"] = other_answers
         return outputs
 
 class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
@@ -346,7 +369,7 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
         sentence_hit = 0
         for sentence in sentences:
             inputs = TEMPLATES["openai"]["repetition_split"].format(sentence=sentence, response=answer2)
-            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
             comment = outputs[0]["generated_text"]
             if "yes" in comment.lower():
                 sentence_hit += 1
@@ -367,7 +390,42 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
 
         total_score = np.mean(scores)
         outputs["score_repetition_split"] = total_score
+        outputs["other_answers"] = other_answers
         return outputs
+
+class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ner_model = NERModel()
+
+    def evaluate_repetition(self, answer1, answer2, question, entity_num=3, **kwargs):
+        inputs = TEMPLATES[self.model_type]["choose_entities"].format(question=question, entity_num=entity_num)
+        outputs = self.__call__(inputs)
+        chosen_entities_text = outputs[0]["generated_text"]
+        entity_groups = self.ner_model.extract_chosen_entities(chosen_entities_text)
+        if len(entity_groups) != entity_num:
+            print("Warning!!! Didn't find enough entities in comment:", chosen_entities_text)
+
+        entities_dict1 = self.ner_model.get_entities_dict(answer1)
+        entities_dict2 = self.ner_model.get_entities_dict(answer2)
+
+        total_num = 0
+        overlap_num = 0
+        overlap_entities = []
+        for entity_group in entity_groups:
+            total_num += len(entities_dict1[entity_group])
+            for entity in entities_dict1[entity_group]:
+                if entity in entities_dict2[entity_group]:
+                    overlap_num += 1
+                    overlap_entities.append(entity)
+        score = overlap_num / total_num * 100
+        output = {
+            "inputs": inputs,
+            "comment": chosen_entities_text,
+            "score": score,
+            "overlap_entities": overlap_entities,
+        }
+        return output
 
 
 class RephraseConsistencyPipeline(MyPipeline):
@@ -377,14 +435,15 @@ class RephraseConsistencyPipeline(MyPipeline):
 
     @staticmethod
     def extract_questions(text, pattern=r'Question \d+: (.+?)\n'):
+        text = text + "\n"
         matches = re.findall(pattern, text)
         questions = [match for match in matches]
-        if len(questions) == 10:
-            print(f"warning!!! There are only {len(questions)} generated rephrased questions")
+        if len(questions) != 10:
+            print(f"warning!!! There are only {len(questions)} generated rephrased questions for {text}")
         return questions
 
     def rephrase_question(self, question, temperature=0, **kwargs):
-        inputs = TEMPLATES["chat"]["question_rephrase"].format(question=question, rephrase_num=self.rephrase_num)
+        inputs = TEMPLATES[self.model_type]["question_rephrase"].format(question=question, rephrase_num=self.rephrase_num)
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
         questions = self.extract_questions(comment)
@@ -395,18 +454,20 @@ class RephraseConsistencyPipeline(MyPipeline):
         scores = []
         for question_ in questions:
             inputs = TEMPLATES["openai"]["compare_questions"].format(question1=question, question2=question_)
-            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo", **kwargs)
+            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
             comment = outputs[0]["generated_text"]
-            if comment.lower() == "yes":
+            if comment.lower().startswith("yes") or comment.lower().startswith(" yes"):
                 scores.append(1)
-            elif comment.lower() == "no":
+            elif comment.lower().startswith("no") or comment.lower().startswith(" no"):
                 scores.append(0)
             else:
                 scores.append(0)
                 print("warning!!! Didn't find yes or no in comment:", comment)
 
         total_score = np.mean(scores) * 100
-        return {"score_rephrase_consistency": total_score, "rephrased_questions": questions}
+        return {"score_rephrase_consistency": total_score,
+                "rephrased_questions": questions,
+                "scores_rephrase_consistency": scores}
 
 
 class RephraseAnswerConsistencyPipeline(RephraseConsistencyPipeline, SelfRepetitionSplitPipeline):
@@ -434,6 +495,6 @@ class RephraseAnswerConsistencyPipeline(RephraseConsistencyPipeline, SelfRepetit
             scores.append(score)
 
 
-        total_score = np.mean(scores) * 100
+        total_score = np.mean(scores)
         return {"score_rephrase_answer_consistency": total_score,
                 "rephrased_questions": questions, "answers": answers_}

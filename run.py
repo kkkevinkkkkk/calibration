@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, SelfEvalPipeline,
-                      SelfRepetitionPipeline, SelfRepetitionSplitPipeline,
+                      SelfRepetitionPipeline, SelfRepetitionSplitPipeline, SelfRepetitionNERPipeline,
                       RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
@@ -26,13 +26,14 @@ def main(
 
     tokenizer = AutoTokenizer.from_pretrained(model) if model not in OPENAI_MODELS else None
     eos_token_id = tokenizer.eos_token_id if model not in OPENAI_MODELS else 0
-    confidence_method = args.get("confidence_method", "None")
+    confidence_method = args.get("confidence_method", "")
     confidence_to_pipeline = {
-        "None": MyPipeline,
+        "": MyPipeline,
         "self_verification": SelfEvalPipeline,
         "log_prob": MyPipeline,
         "self_repetition": SelfRepetitionPipeline,
         "self_repetition_split": SelfRepetitionSplitPipeline,
+        "self_repetition_ner": SelfRepetitionNERPipeline,
         "rephrase_consistency": RephraseConsistencyPipeline,
         "rephrase_answer_consistency": RephraseAnswerConsistencyPipeline,
     }
