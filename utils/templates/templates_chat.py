@@ -83,6 +83,7 @@ TEMPLATES_CHAT = {
     "asqa": template_chat_asqa,
     "eli5": template_chat_eli5,
     "self_eval": template_chat_self_eval,
+    "self_eval_examples": template_chat_self_eval_examples,
     "question_rephrase": template_chat_question_rephrase,
     "choose_entities": template_chat_choose_entities,
 }

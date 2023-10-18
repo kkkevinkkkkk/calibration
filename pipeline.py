@@ -221,12 +221,13 @@ class MyPipeline(TextGenerationPipeline):
         score = int(match.group(1)) if match else 0
         return score
 
-    def __call__(self, inputs, *args, temperature=0,
+    def __call__(self, inputs, *args, temperature=0.6,
                  num_workers=None, batch_size=None, random_state=1, **kwargs):
 
         if self.openai:
             return self.get_openai_completion(inputs, temperature=temperature)
         else:
+            kwargs["temperature"] = temperature
             torch.cuda.manual_seed(random_state)
             records = super().__call__(inputs, **kwargs)
             return records
@@ -241,24 +242,19 @@ class SelfEvalPipeline(MyPipeline):
         super().__init__(*args, **kwargs)
         if "chat" in self.model_name:
             self.template = TEMPLATES["chat"]["self_eval"]
+            # self.template = TEMPLATES["chat"]["self_eval_examples"]
         else:
-            raise Exception
+            raise Exception("Not implemented")
 
-    def fit_template(self, answer, question=""):
-        prompt = self.template.format(question=question, answer=answer)
-        # print(prompt)
-        return prompt
 
-    def extract_scores(self, text):
-        correctness_score = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
-        confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
-        return correctness_score, confidence_score
-
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, **kwargs):
-        inputs = self.fit_template(answer=answer, question=question)
-        outputs = self.__call__(inputs, temperature=temperature, **kwargs)
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, **kwargs):
+        inputs = self.template.format(question=question, answer=answer)
+        # inputs = self.template.format(question=question, answer=answer, examples=EXAMPLES[dataset_name+"_eval"])
+        outputs = self.__call__(inputs, temperature=temperature)
         comment = outputs[0]["generated_text"]
-        correctness_score, confidence_score = self.extract_scores(comment)
+
+        correctness_score = self.extract_score(inputs, pattern=r"Correctness Score: (\d+)/100")
+        confidence_score = self.extract_score(inputs, pattern=r"Confidence Score: (\d+)/100")
 
         output = {
             "inputs_self_eval": inputs,
@@ -328,7 +324,7 @@ class SelfRepetitionPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def __call__(self, inputs, *args, temperature=0,
+    def __call__(self, inputs, *args, temperature=0.6,
                  num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
         sequences = []
         for i in range(num_return_sequences):
@@ -338,20 +334,13 @@ class SelfRepetitionPipeline(MyPipeline):
             sequences.append(outputs[0])
         return sequences
 
-    @staticmethod
-    def extract_score(text, pattern=r"Similarity score: (\d+)/5"):
-        match = re.search(pattern, text)
-        if not match:
-            print("Warning!!!", text)
-        score = int(match.group(1)) if match else 0
-        score *= 20
-        return score
 
     def evaluate_repetition(self, answer1, answer2, question, **kwargs):
         inputs = TEMPLATES["openai"]["repetition"].format(question=question, answer1=answer1, answer2=answer2)
         outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
         comment = outputs[0]["generated_text"]
-        score = self.extract_score(comment)
+        score = self.extract_score(comment, pattern=r"Similarity score: (\d+)/5") * 20
+        # score = self.extract_score(comment)
 
         output = {
             "inputs": inputs,
@@ -360,7 +349,7 @@ class SelfRepetitionPipeline(MyPipeline):
         }
         return output
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None,
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
                                  **kwargs):
         scores = []
         outputs = {}
@@ -397,7 +386,7 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
         }
         return output
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None,
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
                                  **kwargs):
         scores = []
         outputs = {}
@@ -446,6 +435,50 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
         }
         return output
 
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
+                                 **kwargs):
+        scores = []
+        outputs = {}
+        overlap_entities = []
+        for i, answer_ in enumerate(other_answers):
+            output = self.evaluate_repetition(answer, answer_, question)
+            scores.append(output["score"])
+            overlap_entities.append(output["overlap_entities"])
+            outputs["score_repetition_ner" + str(i)] = output["score"]
+
+        total_score = np.mean(scores)
+        outputs["score_repetition_ner"] = total_score
+        outputs["other_answers"] = other_answers
+        outputs["overlap_entities"] = overlap_entities
+        return outputs
+
+
+class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def extract_scores(self, text):
+        correctness_score = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
+        # confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
+        confidence_score = 0
+        return correctness_score, confidence_score
+
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, num_return_sequences=10, **kwargs):
+        inputs = TEMPLATES[self.model_type]["self_eval_examples"].format(question=question, answer=answer, examples=EXAMPLES[dataset_name+"_eval"])
+        outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
+        scores = []
+        output = {"inputs_self_eval": inputs}
+        for i in range(num_return_sequences):
+            comment = outputs[i]["generated_text"]
+            correctness_score, confidence_score = self.extract_scores(comment)
+            scores.append(correctness_score)
+            output["comment_self_eval_" + str(i)] = comment
+
+        output["score_self_eval"] = np.mean(scores)
+        output["score_self_eval_std"] = np.std(scores)
+        output["scores_self_eval"] = scores
+        return output
+
 
 class RephraseConsistencyPipeline(MyPipeline):
     def __init__(self, *args, rephrase_num=10, **kwargs):
@@ -461,7 +494,7 @@ class RephraseConsistencyPipeline(MyPipeline):
             print(f"warning!!! There are only {len(questions)} generated rephrased questions for {text}")
         return questions
 
-    def rephrase_question(self, question, temperature=0, **kwargs):
+    def rephrase_question(self, question, temperature=0.6, **kwargs):
         inputs = TEMPLATES[self.model_type]["question_rephrase"].format(question=question,
                                                                         rephrase_num=self.rephrase_num)
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
@@ -469,7 +502,7 @@ class RephraseConsistencyPipeline(MyPipeline):
         questions = self.extract_questions(comment)
         return questions
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, **kwargs):
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, **kwargs):
         questions = self.rephrase_question(question, temperature=temperature)
         scores = []
         for question_ in questions:
@@ -497,7 +530,7 @@ class RephraseAnswerConsistencyPipeline(RephraseConsistencyPipeline, SelfRepetit
 
     def extract_confidence_score(self, answer, question,
                                  dataset_name="asqa",
-                                 temperature=0,
+                                 temperature=0.6,
                                  prompt_func=None,
                                  prompt_kwargs={},
                                  **kwargs):
