@@ -245,7 +245,11 @@ def compute_qa(data):
     }
 
 
-def compute_gpt_score(data, model_name="gpt-3.5-turbo", dataset_name="asqa", generation_times=5):
+def compute_gpt_score(data, model_name="gpt-3.5-turbo",
+                      dataset_name="asqa",
+                      temperature=0.3,
+                      use_examples=True,
+                      generation_times=5):
     """Compute GPT4 score.
     Args:
         data: requires filed `qa_pairs/short_answers` and `output`
@@ -277,7 +281,8 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo", dataset_name="asqa", gen
                                                gold_answer=gold_answer,
                                                answer=answer,
                                                dataset_name=dataset_name,
-                                               temperature=0.3)
+                                               temperature=temperature,
+                                               use_examples=use_examples)
 
             item[f"{model_name}_comment_{t}"] = outputs["comment"]
             item[f"{model_name}_score_{t}"] = outputs["score"]

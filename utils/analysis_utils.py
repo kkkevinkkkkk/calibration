@@ -94,21 +94,18 @@ def postprocess(df_out):
 
 
 def split_sentence(words, probs, max_words_per_line):
-    lines = [' '.join(words[i:i + max_words_per_line]) for i in range(0, len(words), max_words_per_line)]
+    lines = [words[i:i + max_words_per_line] for i in range(0, len(words), max_words_per_line)]
     probs_lines = [probs[i:i + max_words_per_line] for i in range(0, len(words), max_words_per_line)]
     return lines, probs_lines
 
 
-def display_sentence_with_colors(words, probs, max_words_per_line=10):
+def display_sentence_with_colors(words, probs, max_words_per_line=15):
     lines, probs_lines = split_sentence(words, probs, max_words_per_line)
-    print(lines)
 
     fig, ax = plt.subplots()
     for line_index, line in enumerate(lines):
-        words = line.split()
-        alphas = [prob * 0.9 + 0.1 for prob in probs_lines[line_index]]
-
-        for word_index, (word, alpha) in enumerate(zip(words, alphas)):
+        alphas = [prob * 0.95 + 0.05 for prob in probs_lines[line_index]]
+        for word_index, (word, alpha) in enumerate(zip(line, alphas)):
             ax.text(word_index, -line_index, word, color="#000000", size=60, alpha=alpha)
 
     ax.axis('off')

@@ -1,0 +1,2 @@
+asqa_instruction = "Given an ambiguous factoid question that has different correct answers depending on interpretation, the answer should be a long-form summary that resolves the ambiguity. "
+TASK_INSTRUCTIONS = {"asqa": asqa_instruction}

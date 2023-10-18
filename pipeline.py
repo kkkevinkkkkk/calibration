@@ -14,11 +14,12 @@ from nltk import sent_tokenize
 from string import punctuation
 import numpy as np
 
-from utils import TEMPLATES, NERModel
+from utils import TEMPLATES, NERModel, EXAMPLES, TASK_INSTRUCTIONS
 from collections import defaultdict
 
 from omegaconf import OmegaConf
-OPENAI_MODELS =["gpt-4", "gpt-3.5-turbo"]
+
+OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo"]
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
@@ -28,10 +29,11 @@ def pipeline_init(**kwargs):
     else:
         return transformers.pipeline(**kwargs)
 
+
 def Record(generated_text=None,
-                 seq_log_prob=0,
-                 full_text="",
-                 **kwargs):
+           seq_log_prob=0,
+           full_text="",
+           **kwargs):
     d = {
         "generated_text": generated_text,
         "seq_log_prob": seq_log_prob,
@@ -39,6 +41,7 @@ def Record(generated_text=None,
     }
     d.update(kwargs)
     return d
+
 
 class MyPipeline(TextGenerationPipeline):
     def __init__(self, *args, **kwargs):
@@ -54,7 +57,6 @@ class MyPipeline(TextGenerationPipeline):
         if not self.openai:
             super().__init__(*args, **kwargs)
             self._forward_params = {}
-
 
     def _forward(self, model_inputs, **generate_kwargs):
         input_ids = model_inputs["input_ids"]
@@ -73,15 +75,15 @@ class MyPipeline(TextGenerationPipeline):
         prefix_length = generate_kwargs.pop("prefix_length", 0)
         if prefix_length > 0:
             has_max_new_tokens = "max_new_tokens" in generate_kwargs or (
-                "generation_config" in generate_kwargs
-                and generate_kwargs["generation_config"].max_new_tokens is not None
+                    "generation_config" in generate_kwargs
+                    and generate_kwargs["generation_config"].max_new_tokens is not None
             )
             if not has_max_new_tokens:
                 generate_kwargs["max_length"] = generate_kwargs.get("max_length") or self.model.config.max_length
                 generate_kwargs["max_length"] += prefix_length
             has_min_new_tokens = "min_new_tokens" in generate_kwargs or (
-                "generation_config" in generate_kwargs
-                and generate_kwargs["generation_config"].min_new_tokens is not None
+                    "generation_config" in generate_kwargs
+                    and generate_kwargs["generation_config"].min_new_tokens is not None
             )
             if not has_min_new_tokens and "min_length" in generate_kwargs:
                 generate_kwargs["min_length"] += prefix_length
@@ -130,12 +132,12 @@ class MyPipeline(TextGenerationPipeline):
         prompt_text = model_outputs["prompt_text"]
         scores = model_outputs["scores"]
         tokens_probs_list = [[(self.tokenizer.decode(token), torch.exp(score).item())
-                              for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in range(len(scores))]
+                              for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in
+                             range(len(scores))]
 
         scores_copy = scores.clone()
         scores_copy[scores_copy == -float('inf')] = 0
         seq_log_probs = torch.sum(scores_copy, dim=-1)
-
 
         generated_sequence = generated_sequence.numpy().tolist()
         records = []
@@ -169,14 +171,16 @@ class MyPipeline(TextGenerationPipeline):
 
                 # record = {"generated_text": all_text, "tokens_probs": tokens_probs_list[i],
                 #           "seq_log_prob": seq_log_probs[i].item(), "full_text": full_text}
-                record = {"generated_text": all_text, "seq_log_prob": seq_log_probs[i].item(), "full_text": full_text, "output": all_text}
+                record = {"generated_text": all_text, "seq_log_prob": seq_log_probs[i].item(), "full_text": full_text,
+                          "output": all_text}
                 log_probs = self.post_process_cal_logprob(tokens_probs_list[i])
                 record.update(log_probs)
                 record = Record(**record)
             records.append(record)
 
         return records
-    @retry((Timeout, APIError,ServiceUnavailableError), tries=5, delay=1, backoff=2, max_delay=4)
+
+    @retry((Timeout, APIError, ServiceUnavailableError), tries=5, delay=1, backoff=2, max_delay=4)
     def get_openai_completion(self, prompt, temperature=0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
         model_name = model_name if model_name is not None else self.model_name
@@ -184,14 +188,15 @@ class MyPipeline(TextGenerationPipeline):
         response = openai.ChatCompletion.create(
             model=model_name,
             messages=messages,
-            temperature=temperature,)
+            temperature=temperature, )
         output = response.choices[0].message["content"]
 
         record = Record(**{"generated_text": output,
-                          "seq_log_prob": 0, "full_text": prompt + "\n" + output,
-                         "output": output})
+                           "seq_log_prob": 0, "full_text": prompt + "\n" + output,
+                           "output": output})
         records = [record]
         return records
+
     @staticmethod
     def get_openai_completion_static(prompt, temperature=0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
@@ -258,7 +263,7 @@ class SelfEvalPipeline(MyPipeline):
         output = {
             "inputs_self_eval": inputs,
             "comment_self_eval": comment,
-            "correctness_score_self_eval":  correctness_score,
+            "correctness_score_self_eval": correctness_score,
             "confidence_score_self_eval": confidence_score
         }
         return output
@@ -267,34 +272,46 @@ class SelfEvalPipeline(MyPipeline):
 class EvaluationPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.eval_template = TEMPLATES["openai"]["eval"]
-        self.fact_eval_template = TEMPLATES["openai"]["fact_eval"]
-        self.eval_instruction = "You will be given a question, a gold answer, and a student's answer. Please evaluate the student's answer based on the gold answer, and provide a score from 0-100 to the student's answer."
-        self.asqa_instruction = "Given an ambiguous factoid question that has different correct answers depending on interpretation, the answer should be a long-form summary that resolves the ambiguity. "
 
-    def fit_template(self, answer, question="", gold_answer="", eval_fact=False):
+    def fit_template(self, answer, question="", gold_answer="", eval_fact=False, use_examples=False,
+                     dataset_name='asqa'):
         if not eval_fact:
-            prompt = self.eval_template.format(task_instruction=self.asqa_instruction,
-                                                 eval_instruction=self.eval_instruction,
-                                                 question=question,
-                                                 gold_answer=gold_answer,
-                                                 answer=answer)
+            if not use_examples:
+                prompt = TEMPLATES["openai"]["eval"].format(task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                                                            question=question,
+                                                            reference_answer=gold_answer,
+                                                            answer=answer)
+            else:
+                examples = EXAMPLES[dataset_name+"_eval"]
+                prompt = TEMPLATES["openai"]["eval_with_examples"].format(
+                    task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                    question=question,
+                    reference_answer=gold_answer,
+                    answer=answer,
+                    examples=examples)
+
         else:
-            prompt = self.fact_eval_template.format(answer=answer)
+            prompt = TEMPLATES["openai"]["fact_eval"].format(answer=answer)
 
         return prompt
 
+    def evaluate_answer(self, answer, question, gold_answer, dataset_name="asqa", use_examples=False, temperature=0,
+                        **kwargs):
+        inputs = self.fit_template(answer=answer, question=question,
+                                   gold_answer=gold_answer, eval_fact=False,
+                                   use_examples=use_examples, dataset_name=dataset_name)
 
-    def evaluate_answer(self, answer, question, gold_answer, dataset_name="asqa", temperature=0, **kwargs):
-        inputs = self.fit_template(answer=answer, question=question, gold_answer=gold_answer, eval_fact=False)
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
         score = self.extract_score(comment)
 
-        fact_inputs = self.fit_template(answer=answer, eval_fact=True)
-        outputs = self.__call__(fact_inputs, temperature=temperature, **kwargs)
-        fact_comment = outputs[0]["generated_text"]
-        fact_score = self.extract_score(fact_comment)
+        # fact_inputs = self.fit_template(answer=answer, eval_fact=True)
+        # outputs = self.__call__(fact_inputs, temperature=temperature, **kwargs)
+        # fact_comment = outputs[0]["generated_text"]
+        # fact_score = self.extract_score(fact_comment)
+        fact_inputs = ""
+        fact_comment = ""
+        fact_score = 0
 
         output = {
             "inputs_eval": inputs,
@@ -311,17 +328,15 @@ class SelfRepetitionPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-
     def __call__(self, inputs, *args, temperature=0,
                  num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
         sequences = []
         for i in range(num_return_sequences):
             outputs = super().__call__(inputs, *args, temperature=temperature,
                                        num_workers=num_workers, batch_size=batch_size,
-                                       num_return_sequences=1, random_state=random_state+i, **kwargs)
+                                       num_return_sequences=1, random_state=random_state + i, **kwargs)
             sequences.append(outputs[0])
         return sequences
-
 
     @staticmethod
     def extract_score(text, pattern=r"Similarity score: (\d+)/5"):
@@ -345,7 +360,8 @@ class SelfRepetitionPipeline(MyPipeline):
         }
         return output
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None, **kwargs):
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None,
+                                 **kwargs):
         scores = []
         outputs = {}
         for i, answer_ in enumerate(other_answers):
@@ -359,6 +375,7 @@ class SelfRepetitionPipeline(MyPipeline):
         outputs["score_repetition"] = total_score
         outputs["other_answers"] = other_answers
         return outputs
+
 
 class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
     def __init__(self, *args, **kwargs):
@@ -380,7 +397,8 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
         }
         return output
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None, **kwargs):
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0, other_answers=None,
+                                 **kwargs):
         scores = []
         outputs = {}
         for i, answer_ in enumerate(other_answers):
@@ -392,6 +410,7 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
         outputs["score_repetition_split"] = total_score
         outputs["other_answers"] = other_answers
         return outputs
+
 
 class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
     def __init__(self, *args, **kwargs):
@@ -443,7 +462,8 @@ class RephraseConsistencyPipeline(MyPipeline):
         return questions
 
     def rephrase_question(self, question, temperature=0, **kwargs):
-        inputs = TEMPLATES[self.model_type]["question_rephrase"].format(question=question, rephrase_num=self.rephrase_num)
+        inputs = TEMPLATES[self.model_type]["question_rephrase"].format(question=question,
+                                                                        rephrase_num=self.rephrase_num)
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
         questions = self.extract_questions(comment)
@@ -493,7 +513,6 @@ class RephraseAnswerConsistencyPipeline(RephraseConsistencyPipeline, SelfRepetit
         for answer_ in answers_:
             score = self.evaluate_repetition(answer, answer_)["score"]
             scores.append(score)
-
 
         total_score = np.mean(scores)
         return {"score_rephrase_answer_consistency": total_score,
