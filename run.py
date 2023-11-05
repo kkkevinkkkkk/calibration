@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,
-                      SelfEvalPipeline, SelfEvalRepetitionPipeline,
+                      SelfEvalPipeline, SelfEvalRepetitionPipeline, SelfEvalRangePipeline,
                       SelfRepetitionPipeline, SelfRepetitionSplitPipeline, SelfRepetitionNERPipeline,
                       RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
 from transformers import AutoTokenizer
@@ -32,6 +32,7 @@ def main(
         "": MyPipeline,
         "self_verification": SelfEvalPipeline,
         "self_eval_repetition": SelfEvalRepetitionPipeline,
+        "self_eval_range": SelfEvalRangePipeline,
         "log_prob": MyPipeline,
         "self_repetition": SelfRepetitionPipeline,
         "self_repetition_split": SelfRepetitionSplitPipeline,

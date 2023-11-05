@@ -90,4 +90,5 @@ class NERModel:
         entities = self.__call__(text)
         for entity in entities:
             entities_dict[entity["entity_group"]].add(entity["word"].lower())
+
         return entities_dict

@@ -1,3 +1,5 @@
+from .template_criterion import asqa_criterion
+from .template_examples import EXAMPLES
 template_chat_asqa_0 = '''<s>[INST] <<SYS>>
 You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
 
@@ -49,6 +51,58 @@ Your answer: "{answer}"
 
 Now please provide your score about this answer in the format of "Correctness Score: <Your score>/100" and give your explanation. Assess for both factual accuracy and relevance to the question.[/INST]
 '''
+template_self_eval_five_pnt_asqa = '''<s>[INST] Please evaluate the student's answer to the question, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
+
+{criterion}
+
+Question: {question}
+
+Answer: {answer}
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.[/INST]
+'''
+
+template_self_eval_five_pnt_examples_asqa = '''<s>[INST] Please evaluate the student's answer to the question, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
+
+{criterion}
+
+Here are some examples.
+
+{examples}
+
+Question: {question}
+
+Answer: {answer}
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.[/INST]
+'''
+
+template_self_eval_five_pnt_range_examples_asqa = '''<s>[INST] Please evaluate the student's answer to the question, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
+
+{criterion}
+
+Here are some examples.
+
+{examples}
+
+Question: {question}
+
+Answer: {answer}
+
+Now please provide your score range about this answer in the format of “Score: <score lower bound>-<score upper bound>/5” and give your explanation. Assess for both factual accuracy and relevance to the question.[/INST]
+'''
+
+
+def fit_content(template, examples=None, criterion=None):
+    if examples:
+        template = template.replace("{examples}", examples)
+    if criterion:
+        template = template.replace("{criterion}", criterion)
+    return template
+
+template_self_eval_five_pnt_asqa = fit_content(template_self_eval_five_pnt_asqa, examples=EXAMPLES["asqa_eval_5"], criterion=asqa_criterion)
+template_self_eval_five_pnt_examples_asqa = fit_content(template_self_eval_five_pnt_examples_asqa, examples=EXAMPLES["asqa_eval_5"], criterion=asqa_criterion)
+template_self_eval_five_pnt_range_examples_asqa = fit_content(template_self_eval_five_pnt_range_examples_asqa, examples=EXAMPLES["asqa_eval_5"], criterion=asqa_criterion)
 
 template_chat_question_rephrase = '''<s>[INST] You will be given a question. Please rephrase the question to {rephrase_num} same questions and provide your rephrased questions in the format of
 "Question 1: <Your rephrased question 1>
@@ -82,8 +136,14 @@ template_chat_choose_entities = '''<s>[INST] To validate the answer to "{questio
 TEMPLATES_CHAT = {
     "asqa": template_chat_asqa,
     "eli5": template_chat_eli5,
+
     "self_eval": template_chat_self_eval,
     "self_eval_examples": template_chat_self_eval_examples,
+    "self_eval_five_pnt_asqa": template_self_eval_five_pnt_asqa,
+    "self_eval_five_pnt_examples_asqa": template_self_eval_five_pnt_examples_asqa,
+    "self_eval_five_pnt_range_examples_asqa": template_self_eval_five_pnt_range_examples_asqa,
+
     "question_rephrase": template_chat_question_rephrase,
     "choose_entities": template_chat_choose_entities,
+
 }

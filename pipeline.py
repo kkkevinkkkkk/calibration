@@ -180,7 +180,7 @@ class MyPipeline(TextGenerationPipeline):
 
         return records
 
-    @retry((Timeout, APIError, ServiceUnavailableError), tries=5, delay=1, backoff=2, max_delay=4)
+    @retry((Timeout, APIError, ServiceUnavailableError), tries=5, delay=1, backoff=2, max_delay=9)
     def get_openai_completion(self, prompt, temperature=0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
         model_name = model_name if model_name is not None else self.model_name
@@ -264,42 +264,88 @@ class SelfEvalPipeline(MyPipeline):
         }
         return output
 
+class SelfEvalRangePipeline(SelfEvalPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, **kwargs):
+        inputs = TEMPLATES[self.model_type][f"self_eval_five_pnt_range_examples_{dataset_name}"].format(question=question, answer=answer)
+
+        outputs = self.__call__(inputs, temperature=temperature)
+        comment = outputs[0]["generated_text"]
+        pattern = r"(\d+)-(\d+)/5"
+        match = re.search(pattern, comment)
+        if not match:
+            print("Warning!!! Not find score range in", comment)
+        score_low = int(match.group(1)) if match else 0
+        score_high = int(match.group(2)) if match else 0
+
+
+        output = {
+            "inputs_self_eval_range": inputs,
+            "comment_self_eval_range": comment,
+            "correctness_score_high": score_high,
+            "correctness_score_low": score_low,
+        }
+        return output
+
 
 class EvaluationPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def fit_template(self, answer, question="", gold_answer="", eval_fact=False, use_examples=False,
+    def fit_template(self, answer, question="", gold_answer="", eval_fact=False, use_examples=False, five_pnt=False,
                      dataset_name='asqa'):
         if not eval_fact:
             if not use_examples:
-                prompt = TEMPLATES["openai"]["eval"].format(task_instruction=TASK_INSTRUCTIONS[dataset_name],
-                                                            question=question,
-                                                            reference_answer=gold_answer,
-                                                            answer=answer)
+                if five_pnt:
+                    prompt = TEMPLATES["openai"]["eval_5"].format(task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                                                                question=question,
+                                                                reference_answer=gold_answer,
+                                                                answer=answer)
+                else:
+                    prompt = TEMPLATES["openai"]["eval"].format(task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                                                                question=question,
+                                                                reference_answer=gold_answer,
+                                                                answer=answer)
+
             else:
-                examples = EXAMPLES[dataset_name+"_eval"]
-                prompt = TEMPLATES["openai"]["eval_with_examples"].format(
-                    task_instruction=TASK_INSTRUCTIONS[dataset_name],
-                    question=question,
-                    reference_answer=gold_answer,
-                    answer=answer,
-                    examples=examples)
+                if five_pnt:
+                    examples = EXAMPLES[dataset_name+"_eval_5"]
+                    prompt = TEMPLATES["openai"]["eval_5_with_examples"].format(
+                        task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                        question=question,
+                        reference_answer=gold_answer,
+                        answer=answer,
+                        examples=examples)
+                else:
+                    examples = EXAMPLES[dataset_name+"_eval"]
+                    prompt = TEMPLATES["openai"]["eval_with_examples"].format(
+                        task_instruction=TASK_INSTRUCTIONS[dataset_name],
+                        question=question,
+                        reference_answer=gold_answer,
+                        answer=answer,
+                        examples=examples)
 
         else:
             prompt = TEMPLATES["openai"]["fact_eval"].format(answer=answer)
 
         return prompt
 
-    def evaluate_answer(self, answer, question, gold_answer, dataset_name="asqa", use_examples=False, temperature=0,
+    def evaluate_answer(self, answer, question, gold_answer, dataset_name="asqa",
+                        use_examples=False, five_pnt=False, temperature=0,
                         **kwargs):
         inputs = self.fit_template(answer=answer, question=question,
                                    gold_answer=gold_answer, eval_fact=False,
-                                   use_examples=use_examples, dataset_name=dataset_name)
+                                   use_examples=use_examples, five_pnt=five_pnt,
+                                   dataset_name=dataset_name)
 
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
-        score = self.extract_score(comment)
+        if five_pnt:
+            score = self.extract_score(comment, pattern=r"Score: (\d+)/5") * 20
+        else:
+            score = self.extract_score(comment)
 
         # fact_inputs = self.fit_template(answer=answer, eval_fact=True)
         # outputs = self.__call__(fact_inputs, temperature=temperature, **kwargs)
@@ -362,6 +408,7 @@ class SelfRepetitionPipeline(MyPipeline):
 
         total_score = np.mean(scores)
         outputs["score_repetition"] = total_score
+        outputs["scores_repetition"] = scores
         outputs["other_answers"] = other_answers
         return outputs
 
@@ -372,17 +419,21 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
 
     def evaluate_repetition(self, answer1, answer2, question=None, **kwargs):
         sentences = sent_tokenize(answer1)
-        sentence_hit = 0
+        sentences_hit = []
         for sentence in sentences:
             inputs = TEMPLATES["openai"]["repetition_split"].format(sentence=sentence, response=answer2)
             outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
             comment = outputs[0]["generated_text"]
             if "yes" in comment.lower():
-                sentence_hit += 1
-        score = sentence_hit / len(sentences) * 100
+                sentences_hit.append(1)
+            else:
+                sentences_hit.append(0)
+        score = np.mean(sentences_hit) * 100
 
         output = {
             "score": score,
+            "sentences_hit": sentences_hit,
+            "sentences": sentences,
         }
         return output
 
@@ -390,14 +441,20 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
                                  **kwargs):
         scores = []
         outputs = {}
+        sentences_hits = []
         for i, answer_ in enumerate(other_answers):
             output = self.evaluate_repetition(answer, answer_, question)
             scores.append(output["score"])
             outputs["score_repetition_split" + str(i)] = output["score"]
+            sentences_hits.append(output["sentences_hit"])
+            sentences = output["sentences"]
 
         total_score = np.mean(scores)
         outputs["score_repetition_split"] = total_score
+        outputs["scores_repetition_split"] = scores
         outputs["other_answers"] = other_answers
+        outputs["sentences_hits"] = sentences_hits
+        outputs["sentences"] = sentences
         return outputs
 
 
@@ -406,13 +463,18 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
         super().__init__(*args, **kwargs)
         self.ner_model = NERModel()
 
-    def evaluate_repetition(self, answer1, answer2, question, entity_num=3, **kwargs):
+    def get_entity_groups(self, question, entity_num=3, **kwargs):
         inputs = TEMPLATES[self.model_type]["choose_entities"].format(question=question, entity_num=entity_num)
         outputs = self.__call__(inputs)
         chosen_entities_text = outputs[0]["generated_text"]
         entity_groups = self.ner_model.extract_chosen_entities(chosen_entities_text)
         if len(entity_groups) != entity_num:
             print("Warning!!! Didn't find enough entities in comment:", chosen_entities_text)
+        return entity_groups
+
+    def evaluate_repetition(self, answer1, answer2, question, entity_num=3, entity_groups=None, **kwargs):
+        if entity_groups is None:
+            entity_groups = self.get_entity_groups(question, entity_num=entity_num)
 
         entities_dict1 = self.ner_model.get_entities_dict(answer1)
         entities_dict2 = self.ner_model.get_entities_dict(answer2)
@@ -426,12 +488,21 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
                 if entity in entities_dict2[entity_group]:
                     overlap_num += 1
                     overlap_entities.append(entity)
-        score = overlap_num / total_num * 100
+        if total_num == 0:
+            print("Warning!!! Didn't find any entities in answer 1:", answer1, entities_dict1)
+            score = 0
+        else:
+            score = overlap_num / total_num * 100
+
+        # turn set into list
+        entities_dict1 = {k: list(v) for k, v in entities_dict1.items()}
+        entities_dict2 = {k: list(v) for k, v in entities_dict2.items()}
         output = {
-            "inputs": inputs,
-            "comment": chosen_entities_text,
             "score": score,
             "overlap_entities": overlap_entities,
+            "entity_groups": entity_groups,
+            "entities_dict1": entities_dict1,
+            "entities_dict2": entities_dict2,
         }
         return output
 
@@ -439,17 +510,21 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
                                  **kwargs):
         scores = []
         outputs = {}
-        overlap_entities = []
+        results_dict = defaultdict(list)
         for i, answer_ in enumerate(other_answers):
             output = self.evaluate_repetition(answer, answer_, question)
             scores.append(output["score"])
-            overlap_entities.append(output["overlap_entities"])
-            outputs["score_repetition_ner" + str(i)] = output["score"]
+            results_dict['overlap_entities'].append(output["overlap_entities"])
+            results_dict['entity_groups'].append(output["entity_groups"])
+            results_dict['entities_dict1'].append(output["entities_dict1"])
+            results_dict['entities_dict2'].append(output["entities_dict2"])
 
         total_score = np.mean(scores)
         outputs["score_repetition_ner"] = total_score
+        outputs["scores_repetition_ner"] = scores
         outputs["other_answers"] = other_answers
-        outputs["overlap_entities"] = overlap_entities
+
+        outputs.update(results_dict)
         return outputs
 
 
@@ -457,20 +532,32 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def extract_scores(self, text):
-        correctness_score = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
+    def extract_scores(self, text, five_pnt=False):
+        if five_pnt:
+            correctness_score = self.extract_score(text, pattern=r"Score: (\d+)/5") * 20
+        else:
+            correctness_score = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
         # confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
         confidence_score = 0
         return correctness_score, confidence_score
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, num_return_sequences=10, **kwargs):
-        inputs = TEMPLATES[self.model_type]["self_eval_examples"].format(question=question, answer=answer, examples=EXAMPLES[dataset_name+"_eval"])
+    def extract_confidence_score(self, answer, question,
+                                 dataset_name="asqa",
+                                 temperature=0.6,
+                                 num_return_sequences=10,
+                                 five_pnt=True, **kwargs):
+        if five_pnt:
+            inputs = (TEMPLATES[self.model_type][f"self_eval_five_pnt_examples_{dataset_name}"].
+                      format(question=question, answer=answer, examples=EXAMPLES[dataset_name+"_eval_5"]))
+        else:
+            inputs = TEMPLATES[self.model_type]["self_eval_examples"].format(question=question, answer=answer, examples=EXAMPLES[dataset_name+"_eval"])
         outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
         scores = []
+        output = self.__call__(inputs, num_return_sequences=1, temperature=temperature)
         output = {"inputs_self_eval": inputs}
         for i in range(num_return_sequences):
             comment = outputs[i]["generated_text"]
-            correctness_score, confidence_score = self.extract_scores(comment)
+            correctness_score, confidence_score = self.extract_scores(comment, five_pnt)
             scores.append(correctness_score)
             output["comment_self_eval_" + str(i)] = comment
 

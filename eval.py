@@ -249,7 +249,8 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
                       dataset_name="asqa",
                       temperature=0.3,
                       use_examples=True,
-                      generation_times=5):
+                      generation_times=5,
+                      five_pnt=False):
     """Compute GPT4 score.
     Args:
         data: requires filed `qa_pairs/short_answers` and `output`
@@ -257,8 +258,8 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
         QA metrics (QA-EM, QA-F1, QA-Hit)
     """
 
-    if model_name == "gpt-4":
-        generation_times = 1
+    if model_name == "gpt-4" and generation_times > 1:
+        print(f"Warning: GPT-4 is too expensive to generate {generation_times} times.")
     # Load model
     pipeline = pipeline_init(
         model=model_name,
@@ -282,7 +283,9 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
                                                answer=answer,
                                                dataset_name=dataset_name,
                                                temperature=temperature,
-                                               use_examples=use_examples)
+                                               use_examples=use_examples,
+                                               five_pnt=five_pnt,
+                                               )
 
             item[f"{model_name}_comment_{t}"] = outputs["comment"]
             item[f"{model_name}_score_{t}"] = outputs["score"]
@@ -290,6 +293,7 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
             item[f"{model_name}_fact_score_{t}"] = outputs["fact_score"]
             local_scores.append(outputs["score"])
             local_fact_scores.append(outputs["fact_score"])
+
 
         item[f"{model_name}_comment"] = outputs["comment"]
         item[f"{model_name}_score"] = np.mean(local_scores)
@@ -554,7 +558,9 @@ def main():
     parser.add_argument("--at_most_citations", type=int, default=3, help="At most take this many documents (mostly for precision)")
     parser.add_argument("--claims_nli", action="store_true", help="Use claims for ELI5")
     parser.add_argument("--gpt4", action="store_true", help="Use GPT4 to evaluate")
-    parser.add_argument("--gpt3_5", action="store_true", help="Use GPT4 to evaluate")
+    parser.add_argument("--gpt4_five_pnt", action="store_true", help="Use GPT4 to evaluate")
+    parser.add_argument("--gpt3_5", action="store_true", help="Use GPT3.5 to evaluate")
+    parser.add_argument("--gpt3_5_five_pnt", action="store_true", help="Use GPT3.5 to evaluate")
 
     # QAMPARI
     parser.add_argument("--cot", action="store_true", help="For QAMPARI, try to find colon and separate the COT and answer listing")
@@ -602,10 +608,18 @@ def main():
     if args.gpt3_5:
         result.update(compute_gpt_score(normalized_data))
         metrics.append("gpt-3.5")
+    if args.gpt3_5_five_pnt:
+        temperature = 1
+        result.update(compute_gpt_score(normalized_data, five_pnt=True, temperature=temperature, generation_times=5))
+        metrics.append(f"gpt-3.5_five_pnt_t:{temperature}")
     if args.gpt4:
-        result.update(compute_gpt_score(normalized_data, model_name="gpt-4"))
+        result.update(compute_gpt_score(normalized_data, model_name="gpt-4", generation_times=1))
         metrics.append("gpt-4")
-
+    if args.gpt4_five_pnt:
+        temperature = 1
+        generation_times = 5
+        result.update(compute_gpt_score(normalized_data, model_name="gpt-4", five_pnt=True, temperature=temperature, generation_times=generation_times))
+        metrics.append(f"gpt-4_five_pnt_t:{temperature}")
     if args.mauve:
         result['mauve'] = compute_mauve(normalized_data)
         metrics.append("mauve")

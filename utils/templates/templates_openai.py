@@ -28,6 +28,78 @@ Student's answer: "{answer}"
 Please provide your score about this answer in the format of "Score: <Your score>/100" and give your explanation.
 '''
 
+template_openai_eval_5 = '''{task_instruction}
+
+You will be given a question, a reference answer, and a student's answer. Please evaluate the student's answer based on the reference answer, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
+
+5 - Completely Correct and Highly Relevant: The answer fully addresses the question, resolves the ambiguity, and provides a well-rounded resolution. All facts presented in the answer are accurate and relevant.
+4 - Mostly Correct and Relevant: The answer is very relevant and addresses the ambiguity well, but might have a minor oversight or inaccuracy. Almost all the facts presented are accurate, with only minor errors.
+3 - Partially Correct and Relevant: The answer is generally on topic and attempts to address the ambiguity, but there might be minor inaccuracies or omissions. The majority of the facts are correct, with only a few minor errors.
+2 - Somewhat Relevant but Flawed: The answer somewhat addresses the topic but does not fully explore the question's ambiguity or does not provide a complete resolution. The facts presented are a mix of correct and incorrect information, with about half being accurate.
+1 - Mostly Irrelevant or Incorrect: The answer slightly touches upon the topic but misses the main point. The majority of the facts presented are incorrect, with only a small portion being accurate.
+0 - Completely Irrelevant or Incorrect: The student's answer is completely off-topic, not related to the question at all, or contains only incorrect information.
+
+Question: "{question}"
+
+Reference answer: "{reference_answer}"
+
+Student's answer: "{answer}"
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation.
+'''
+
+template_openai_eval_5_examples_11_4 = '''{task_instruction}
+
+You will be given a question, a reference answer, and a student's answer. Please evaluate the student's answer based on the reference answer, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following is the scoring criteria:
+
+5 - Completely Correct and Highly Relevant: The answer fully addresses the question, resolves the ambiguity, and provides a well-rounded resolution. All facts presented in the answer are accurate and relevant.
+4 - Mostly Correct and Relevant: The answer is very relevant and addresses the ambiguity well, but might have a minor oversight or inaccuracy. Almost all the facts presented are accurate, with only minor errors.
+3 - Partially Correct and Relevant: The answer is generally on topic and attempts to address the ambiguity, but there might be minor inaccuracies or omissions. The majority of the facts are correct, with only a few minor errors.
+2 - Somewhat Relevant but Flawed: The answer somewhat addresses the topic but does not fully explore the question's ambiguity or does not provide a complete resolution. The facts presented are a mix of correct and incorrect information, with about half being accurate.
+1 - Mostly Irrelevant or Incorrect: The answer slightly touches upon the topic but misses the main point. The majority of the facts presented are incorrect, with only a small portion being accurate.
+0 - Completely Irrelevant or Incorrect: The student's answer is completely off-topic, not related to the question at all, or contains only incorrect information.
+
+Here are some examples.
+
+{examples}
+
+Now it's your turn.
+
+Question: "{question}"
+
+Reference answer: "{reference_answer}"
+
+Student's answer: "{answer}"
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation.
+'''
+
+template_openai_eval_5_examples = '''{task_instruction}
+
+You will be given a question, a reference answer, and a student's answer. Please evaluate the student's answer based on the reference answer, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
+
+5 - Completely Correct and Highly Relevant: The answer fully addresses the question, resolves the ambiguity, and provides a well-rounded resolution. All facts presented in the answer are accurate and relevant.
+4 - Mostly Correct and Relevant: The answer is very relevant and addresses the ambiguity well, but might have a minor oversight or inaccuracy. All the facts presented are accurate and relevant, or with only minor errors.
+3 - Partially Correct and Relevant: The answer is generally on topic and attempts to address the ambiguity, but there might be inaccuracies or omissions. The majority of the facts are correct, with a few errors.
+2 - Flawed but Somewhat Relevant: The answer somewhat addresses the topic but does not fully explore the question's ambiguity or does not provide a complete resolution. The facts presented are a mix of correct and incorrect information, with about half being accurate.
+1 - Mostly Incorrect or Mostly Irrelevant: The answer slightly touches upon the topic but misses the main point. The majority of the facts presented are incorrect, with only a small portion being accurate.
+0 - Completely Incorrect or Completely Irrelevant: The student's answer is completely off-topic, not related to the question at all, or contains only incorrect information.
+
+Here are some examples.
+
+{examples}
+
+Now it's your turn.
+
+Question: "{question}"
+
+Reference answer: "{reference_answer}"
+
+Student's answer: "{answer}"
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation.
+'''
+
 template_openai_fact_eval = '''You will be given a student's answer and please evaluate the answer for its factuality.
 
 Student's answer: {answer}
@@ -75,6 +147,8 @@ Answer yes or no.
 
 TEMPLATES_OPENAI = {
     "eval": template_openai_eval,
+    "eval_5": template_openai_eval_5,
+    "eval_5_with_examples": template_openai_eval_5_examples,
     "eval_with_examples": template_openai_eval_examples,
     "fact_eval": template_openai_fact_eval,
     "repetition": template_openai_repetition,
