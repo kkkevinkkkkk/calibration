@@ -7,7 +7,9 @@ import numpy as np
 
 from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,
                       SelfEvalPipeline, SelfEvalRepetitionPipeline, SelfEvalRangePipeline,
-                      SelfRepetitionPipeline, SelfRepetitionSplitPipeline, SelfRepetitionNERPipeline,
+                      SelfVerificationPipeline,
+                      SelfRepetitionPipeline, SelfRepetitionSplitPipeline,
+                      SelfRepetitionNERPipeline, SelfRepetitionClaimPipeline,
                       RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
@@ -30,18 +32,20 @@ def main(
     confidence_method = args.get("confidence_method", "")
     confidence_to_pipeline = {
         "": MyPipeline,
-        "self_verification": SelfEvalPipeline,
+        "self_verification": SelfVerificationPipeline,
+        "self_eval": SelfEvalPipeline,
         "self_eval_repetition": SelfEvalRepetitionPipeline,
         "self_eval_range": SelfEvalRangePipeline,
         "log_prob": MyPipeline,
         "self_repetition": SelfRepetitionPipeline,
         "self_repetition_split": SelfRepetitionSplitPipeline,
         "self_repetition_ner": SelfRepetitionNERPipeline,
+        "self_repetition_claim": SelfRepetitionClaimPipeline,
         "rephrase_consistency": RephraseConsistencyPipeline,
         "rephrase_answer_consistency": RephraseAnswerConsistencyPipeline,
     }
 
-    num_return_sequences = 10 if "self_repetition" in confidence_method else 1
+    num_return_sequences = args.get("num_return_sequences", 1)
 
     pipeline = pipeline_init(
         task="text-generation",
@@ -61,7 +65,11 @@ def main(
     eval_data = json.load(open(args.eval_file))
 
     if args.sample_num > 0:
-        eval_data = eval_data[:args.sample_num]
+        if args.get("sample_start", None) is not None:
+            eval_data = eval_data[args.sample_start: args.sample_start + args.sample_num]
+            print(f"sample from {args.sample_start} to {args.sample_start + args.sample_num}")
+        else:
+            eval_data = eval_data[:args.sample_num]
     else:
         args.sample_num = len(eval_data)
 
@@ -108,6 +116,7 @@ def main(
 
         eval_item.update(sequences[0])
         other_answers = [item["generated_text"] for item in sequences[1:]]
+        eval_item["other_answers"] = other_answers
 
         confidence_output = pipeline.extract_confidence_score(answer=eval_item["generated_text"],
                                                               question=eval_item["question"],
@@ -123,7 +132,10 @@ def main(
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         print(f"create {save_dir}")
-    save_path = os.path.join(save_dir, f"{model_name}_predictions_{args.sample_num}.json")
+    if args.sample_start is not None:
+        save_path = os.path.join(save_dir, f"{model_name}_predictions_{args.sample_start}_{args.sample_start + args.sample_num}.json")
+    else:
+        save_path = os.path.join(save_dir, f"{model_name}_predictions_{args.sample_num}.json")
 
     with open(save_path, 'w') as f:
         json.dump(eval_data, f)

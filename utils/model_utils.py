@@ -43,38 +43,57 @@ class NERModel:
             "WORK_OF_ART": "Work of art name",
         }
         self.meaning_to_group = {v: k for k, v in self.entity_groups.items()}
+        self.merged_entity_groups_map = {
+            "Number": ["CARDINAL", "QUANTITY", "ORDINAL", "PERCENT", "MONEY"],
+            "Date_and_times": ["DATE", "TIME"],
+            "Location": ["GPE", "LOC", "FAC"],
+            "Person": ["PERSON"],
+            "Organization": ["ORG", "NORP"],
+            "Event": ["EVENT"],
+            "Language": ["LANGUAGE"],
+            "Law": ["LAW"],
+            "Product": ["PRODUCT"],
+            "Work_of_art": ["WORK_OF_ART"],
+        }
+        self.merged_entity_groups = {
+            "Number": "This category includes all entities that represent numerical information, such as cardinal numbers, ordinal numbers, percentages, and monetary values.",
+            "Date_and_times": "This category includes all entities that are time-related, such as dates and times.",
+            "Location": "This category includes all entities that are location-related, such as countries, cities, buildings and other geographical locations.",
+            "Person": "This category includes all entities that are person-related, such as names of people.",
+            "Organization": "This category includes all entities that are organization-related, such as names of organizations, affiliations.",
+            "Event": "This category includes all entities that are event-related.",
+            "Language": "This category includes all entities that are language-related.",
+            "Law": "This category includes all entities that are law-related.",
+            "Product": "This category includes all entities that are product-related.",
+            "Work_of_art": "This category includes all entities that are work of art-related.",
+        }
 
-    @staticmethod
-    def map_entities(entities):
+
+    def map_entities(self, entities):
         new_entities = []
         for entity in entities:
+            entity['entity_group'] = entity['label']
+            for group, subgroup in self.merged_entity_groups_map.items():
+                if entity['label'] in subgroup:
+                    entity['entity_group'] = group
+                    break
+
             new_entities.append(
                 {
-                    'entity_group': entity['label'],
+                    'entity_group': entity['entity_group'],
                     'score': entity["score"],
                     "word": entity["span"],
                     'start': entity['char_start_index'],
                     'end': entity['char_end_index'],
                 }
             )
-            if entity['label'] in ["CARDINAL", "QUANTITY"]:
-                new_label = "QUANTITY" if entity['label'] == "CARDINAL" else "CARDINAL"
-                new_entities.append(
-                    {
-                        'entity_group': new_label,
-                        'score': entity["score"],
-                        "word": entity["span"],
-                        'start': entity['char_start_index'],
-                        'end': entity['char_end_index'],
-                    }
-                )
         return new_entities
 
     def extract_chosen_entities(self, chosen_entities_text):
         chosen_entities_text = chosen_entities_text.lower()
         entity_groups = []
-        for k, v in self.entity_groups.items():
-            if v.lower() in chosen_entities_text:
+        for k, v in self.merged_entity_groups.items():
+            if k.lower() in chosen_entities_text:
                 entity_groups.append(k)
         return entity_groups
 

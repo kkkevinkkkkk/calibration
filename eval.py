@@ -248,6 +248,7 @@ def compute_qa(data):
 def compute_gpt_score(data, model_name="gpt-3.5-turbo",
                       dataset_name="asqa",
                       temperature=0.3,
+                      #debug
                       use_examples=True,
                       generation_times=5,
                       five_pnt=False):
@@ -298,10 +299,12 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
         item[f"{model_name}_comment"] = outputs["comment"]
         item[f"{model_name}_score"] = np.mean(local_scores)
         item[f"{model_name}_score_std"] = np.std(local_scores)
+        item[f"{model_name}_scores"] = local_scores
 
         item[f"{model_name}_fact_comment"] = outputs["fact_comment"]
         item[f"{model_name}_fact_score"] = np.mean(local_fact_scores)
         item[f"{model_name}_fact_score_std"] = np.std(local_fact_scores)
+        item[f"{model_name}_fact_scores"] = local_fact_scores
 
         scores.append(np.mean(local_scores))
         fact_scores.append(np.mean(local_fact_scores))
@@ -370,7 +373,8 @@ def compute_claims(data):
         for claim in claims:
             entail += _run_nli_autoais(normalized_output, claim)
         scores.append(entail / len(claims))
-    return 100 * np.mean(scores)
+        item["claim_score"] = entail / len(claims)
+    return {"claims_nli": 100 * np.mean(scores), "data": data}
 
 
 def compute_autoais(data,
@@ -598,6 +602,15 @@ def main():
     metrics = []
     result['length'] = compute_len(normalized_data)
     result['str_em'], result['str_hit'] = compute_str_em(normalized_data)
+
+    dataset_name = ""
+    if "eli5" in args.f:
+        dataset_name = "eli5"
+    elif "asqa" in args.f:
+        dataset_name = "asqa"
+    else:
+        raise NotImplementedError
+
     if qampari:
         result.update(compute_qampari_f1(normalized_data, cot=args.cot))
     if not args.no_rouge:
@@ -605,28 +618,33 @@ def main():
     if args.qa:
         result.update(compute_qa(normalized_data))
         metrics.append("qa")
-    if args.gpt3_5:
-        result.update(compute_gpt_score(normalized_data))
-        metrics.append("gpt-3.5")
-    if args.gpt3_5_five_pnt:
-        temperature = 1
-        result.update(compute_gpt_score(normalized_data, five_pnt=True, temperature=temperature, generation_times=5))
-        metrics.append(f"gpt-3.5_five_pnt_t:{temperature}")
-    if args.gpt4:
-        result.update(compute_gpt_score(normalized_data, model_name="gpt-4", generation_times=1))
-        metrics.append("gpt-4")
-    if args.gpt4_five_pnt:
-        temperature = 1
-        generation_times = 5
-        result.update(compute_gpt_score(normalized_data, model_name="gpt-4", five_pnt=True, temperature=temperature, generation_times=generation_times))
-        metrics.append(f"gpt-4_five_pnt_t:{temperature}")
     if args.mauve:
         result['mauve'] = compute_mauve(normalized_data)
         metrics.append("mauve")
     if args.citations: 
         result.update(compute_autoais(data, qampari=qampari, at_most_citations=args.at_most_citations))
     if args.claims_nli:
-        result["claims_nli"] = compute_claims(normalized_data)
+        result.update(compute_claims(normalized_data))
+        metrics.append("claims_nli")
+
+    if args.gpt3_5:
+        result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name))
+        metrics.append("gpt-3.5")
+    if args.gpt3_5_five_pnt:
+        temperature = 1
+        result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name, five_pnt=True, temperature=temperature, generation_times=5))
+        metrics.append(f"gpt-3.5_five_pnt_t:{temperature}")
+    if args.gpt4:
+        result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name, model_name="gpt-4", generation_times=1))
+        metrics.append("gpt-4")
+    if args.gpt4_five_pnt:
+        temperature = 0.7
+        generation_times = 5
+        result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name,
+                                        model_name="gpt-4", five_pnt=True,
+                                        temperature=temperature, generation_times=generation_times))
+        metrics.append(f"gpt-4_five_pnt_t:{temperature}")
+
 
     for k, v in result.items():
         if k != "data":
