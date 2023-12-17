@@ -135,7 +135,10 @@ def compute_rouge(data):
         hypotheses[idx] = item["output"]
         if "annotations" in item and item['annotations'] is not None: # For ASQA
             references1[idx] = item["annotations"][0]["long_answer"]
-            references2[idx] = item["annotations"][1]["long_answer"]
+            if len(item["annotations"]) > 1:
+                references2[idx] = item["annotations"][1]["long_answer"]
+            else:
+                references2 = None
         else:
             references1[idx] = item["answer"]
             references2[idx] = item["answer"]
@@ -639,7 +642,7 @@ def main():
         metrics.append("gpt-4")
     if args.gpt4_five_pnt:
         temperature = 0.7
-        generation_times = 5
+        generation_times = 1
         result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name,
                                         model_name="gpt-4", five_pnt=True,
                                         temperature=temperature, generation_times=generation_times))

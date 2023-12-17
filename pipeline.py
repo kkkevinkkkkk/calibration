@@ -50,9 +50,14 @@ class MyPipeline(TextGenerationPipeline):
     def __init__(self, *args, **kwargs):
         self.model_name = kwargs["model_name"] if "model_name" in kwargs else kwargs["model"]
         self.openai = True if self.model_name in OPENAI_MODELS else False
+
+        def is_trained_model(s):
+            pattern = r'^\d+\.\d+\.\d+$'
+            return bool(re.match(pattern, s))
+
         if "vicuna" in self.model_name:
             self.model_type = "vicuna"
-        elif "chat" in self.model_name:
+        elif "chat" in self.model_name or is_trained_model(self.model_name):
             self.model_type = "chat"
         else:
             self.model_type = "openai"

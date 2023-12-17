@@ -205,6 +205,9 @@ def read_predictions_and_results(
     assert score_column_map[confidence_method] in df_pred.columns
     df_pred = df_pred.rename(columns={score_column_map[confidence_method]: "score"})
 
+    df_pred["expected_confidence"] = df_pred["confidence_distribution"].apply(
+        lambda x: sum([i / 5 * x[i] for i in range(6)]))
+    df_data["expected_correctness"] = df_data["gpt-4_score"] / 100
     return df_pred, df_data, scores
 
 def selective_answering_distributed(confidence_distributions, conf_threshold=1, score_threshold=1):

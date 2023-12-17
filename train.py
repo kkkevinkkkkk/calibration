@@ -1,0 +1,146 @@
+from omegaconf import OmegaConf
+import fire
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report
+import torch
+from transformers import TrainingArguments, Trainer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import EarlyStoppingCallback
+import numpy as np
+import pandas as pd
+from pipeline import MyPipeline, OPENAI_MODELS, pipeline_init
+from copy import deepcopy
+from transformers.trainer_callback import TrainerCallback
+import os
+import wandb
+from peft import LoraConfig, PeftModel
+from trl import SFTTrainer
+from transformers import pipeline
+import re
+from accelerate import Accelerator
+from utils import TEMPLATES
+from datasets import Dataset
+
+
+def process_data(data, dataset_name):
+    dataset = []
+    for i, eval_item in data.iterrows():
+        template = TEMPLATES["chat"][f'self_eval_categorical_{dataset_name}']
+        # template = TEMPLATES["chat"][f'self_eval_categorical_examples_{dataset_name}']
+        prompt = template.replace("{question}", eval_item['question']).replace("{answer}", eval_item['generated_text'])
+        prompt += "\n" + eval_item['gpt-4_comment'] + ' </s>'
+        dataset.append({"text": prompt})
+    dataset_df = pd.DataFrame(dataset)
+    dataset = Dataset.from_pandas(dataset_df)
+    return dataset
+
+def main(
+        config_path="configures/v0.0.0.yml"
+):
+    conf = OmegaConf.load(config_path)
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="train_self_eval",
+        # track hyperparameters and run metadata
+        config={k:v for k, v in conf.items()},
+        name=conf.version,
+    )
+    # set seed
+    np.random.seed(conf.seed)
+    torch.manual_seed(conf.seed)
+    torch.cuda.manual_seed(conf.seed)
+
+
+    model_name = conf.model_name
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, trust_remote_code=True)
+
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"  # Fix weird overflow issue with fp16 training
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=False,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        quantization_config=bnb_config,
+        device_map={"": Accelerator().process_index},
+    )
+    model.config.use_cache = False
+    # More info: https://github.com/huggingface/transformers/pull/24906
+    model.config.pretraining_tp = 1
+    # LoRA Config
+    peft_parameters = LoraConfig(
+        lora_alpha=16,
+        lora_dropout=0.1,
+        r=8,
+        bias="none",
+        task_type="CAUSAL_LM"
+    )
+    train_data = pd.read_json(os.path.join(conf.save_dir, conf.dataset_name,"train_v1.0.json"))
+    val_data = pd.read_json(os.path.join(conf.save_dir, conf.dataset_name,"val_v1.0.json"))
+
+
+    if conf.sample_num > 0:
+        train_data = train_data[:conf.sample_num]
+        val_data = val_data[:conf.sample_num]
+
+    train_dataset = process_data(train_data, conf.dataset_name)
+    val_dataset = process_data(val_data, conf.dataset_name)
+
+    save_dir = os.path.join(conf.save_dir, conf.version)
+
+    # Define Trainer
+    args = TrainingArguments(
+        output_dir=os.path.join(save_dir),
+        evaluation_strategy="steps",
+        eval_steps=conf.eval_steps,
+        save_steps=conf.save_steps,
+        learning_rate=conf.learning_rate,
+        per_device_train_batch_size=conf.per_device_train_batch_size,
+        per_device_eval_batch_size=16,
+        num_train_epochs=conf.num_train_epochs,
+        seed=conf.seed,
+        load_best_model_at_end=True,
+        logging_dir='./logs',
+        run_name=conf.version,
+        report_to="wandb",
+        warmup_steps=conf.get("warmup_steps", 0),
+        gradient_accumulation_steps=conf.get("gradient_accumulation_steps", 1),
+        ddp_find_unused_parameters=False,
+    )
+
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        peft_config=peft_parameters,
+        dataset_text_field="text",
+        tokenizer=tokenizer,
+        args=args,
+        max_seq_length=conf.get("max_length", 2048),
+    )
+
+    trainer.train()
+
+    # pipe = pipeline_init(
+    #     task="text-generation",
+    #     model=model,
+    #     torch_dtype=torch.float16,
+    #     device_map="auto",
+    #     pipeline_class=MyPipeline,
+    #     model_name=model_name,
+    #     tokenizer=tokenizer,
+    # )
+
+    save_dir = os.path.join(save_dir, "checkpoint-final")
+    print(f"Saving last checkpoint of the model to {save_dir}")
+    trainer.model.save_pretrained(save_dir)
+
+    wandb.finish()
+
+
+
+
+if __name__ == '__main__':
+    fire.Fire(main)

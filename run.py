@@ -1,3 +1,4 @@
+import pandas as pd
 import transformers
 import torch
 import fire
@@ -12,6 +13,7 @@ from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,
                       SelfRepetitionNERPipeline, SelfRepetitionClaimPipeline,
                       RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
 from transformers import AutoTokenizer
+from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
 from utils import make_head_prompt, make_text_input
 from tqdm import tqdm
@@ -26,8 +28,15 @@ def main(
 
     print(args)
     model = args.model
+    model_name = args.model.split("/")[-1]
 
-    tokenizer = AutoTokenizer.from_pretrained(model) if model not in OPENAI_MODELS else None
+    if args.get("model_path", None) is not None:
+        model = AutoPeftModelForCausalLM.from_pretrained(args.model_path, torch_dtype=torch.bfloat16, device_map="auto")
+        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-13b-chat-hf")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model) if model not in OPENAI_MODELS else None
+
+
     eos_token_id = tokenizer.eos_token_id if model not in OPENAI_MODELS else 0
     confidence_method = args.get("confidence_method", "")
     confidence_to_pipeline = {
@@ -53,16 +62,21 @@ def main(
         torch_dtype=torch.float16,
         device_map="auto",
         pipeline_class=confidence_to_pipeline[confidence_method],
-        model_name=model,
+        model_name=model_name,
+        tokenizer=tokenizer,
     )
 
-    # Generate prompts
+    # set seed
     np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
     # Load data
     prompt_data = json.load(open(args.prompt_file))
     eval_data = json.load(open(args.eval_file))
+    if args.get("answer_file", None) is not None:
+        eval_data = pd.read_json(args.answer_file)['data']
+
 
     if args.sample_num > 0:
         if args.get("sample_start", None) is not None:
@@ -102,21 +116,22 @@ def main(
 
         if idx == 0:
             print(text_input)
+        if args.get("answer_file", None) is None:
+            sequences = pipeline(
+                text_input,
+                do_sample=True,
+                top_k=10,
+                num_return_sequences=num_return_sequences,
+                eos_token_id=eos_token_id,
+                max_length=2048,
+                random_state=args.seed
+            )
 
-        sequences = pipeline(
-            text_input,
-            do_sample=True,
-            top_k=10,
-            num_return_sequences=num_return_sequences,
-            eos_token_id=eos_token_id,
-            max_length=2048,
-            random_state=args.seed
-        )
-
-
-        eval_item.update(sequences[0])
-        other_answers = [item["generated_text"] for item in sequences[1:]]
-        eval_item["other_answers"] = other_answers
+            eval_item.update(sequences[0])
+            other_answers = [item["generated_text"] for item in sequences[1:]]
+            eval_item["other_answers"] = other_answers
+        else:
+            other_answers = None
 
         confidence_output = pipeline.extract_confidence_score(answer=eval_item["generated_text"],
                                                               question=eval_item["question"],
@@ -127,12 +142,11 @@ def main(
                                                               )
         eval_item.update(confidence_output)
 
-    model_name = args.model.split("/")[-1]
     save_dir = os.path.join(args.save_dir, f"results/{args.exp_name}/{args.dataset_name}")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         print(f"create {save_dir}")
-    if args.sample_start is not None:
+    if args.get("sample_start", None) is not None:
         save_path = os.path.join(save_dir, f"{model_name}_predictions_{args.sample_start}_{args.sample_start + args.sample_num}.json")
     else:
         save_path = os.path.join(save_dir, f"{model_name}_predictions_{args.sample_num}.json")
