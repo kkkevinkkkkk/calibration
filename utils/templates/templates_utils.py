@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from .templates import TEMPLATES
+from utils.templates import TEMPLATES
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -36,22 +36,6 @@ def get_shorter_text(item, docs, ndoc, key):
         if len(doc_list) >= ndoc:
             break
     return doc_list
-
-
-def make_chat_prompt(eval_item, dataset_name="asqa", ndoc=5):
-    template = TEMPLATES["chat"][dataset_name]
-    if dataset_name == "asqa":
-        question = eval_item["question"]
-        prompt = template.format(question=question)
-    elif dataset_name == "eli5":
-        question = eval_item["question"]
-        doc_list = get_shorter_text(eval_item, eval_item["docs"], ndoc, "summary")
-        inline_doc = "".join([make_doc_prompt(doc_list[doc_id], doc_id, DOC_PROMPT) for doc_id in range(len(doc_list))])
-        prompt = template.format(documents=inline_doc, question=question)
-    else:
-        raise Exception
-
-    return prompt
 
 
 def make_demo(item, template,
@@ -99,7 +83,7 @@ def make_head_prompt(prompt_data: dict,
                      use_shorter: str = "summary",
                      ):
     train_ids = np.random.choice(len(prompt_data["demos"]), n_shot, replace=False)
-    head_prompt = prompt_data["instruction"]
+    head_prompt = prompt_data["instruction"] + "\n\n"
     if n_shot > 0:
         head_prompt += "Here are some examples:\n\n"
 
@@ -120,31 +104,6 @@ def make_head_prompt(prompt_data: dict,
     head_prompt += "Now let's answer:\n\n"
     return head_prompt
 
-def make_text_input(
-        eval_item: dict,
-        head_prompt: str = None,
-        model_name: str = "llama-7b-hf",
-        n_doc: int = 0,
-        template: str = None,
-        doc_prompt: str = None,
-        instruction: str = None,
-        use_shorter: str = "summary",
-        test: bool = True,
-        dataset_name: str = "asqa",
-                ):
-    if "chat" in model_name:
-        text_input = make_chat_prompt(eval_item, dataset_name, ndoc=n_doc)
-    else:
-        text_input = head_prompt + make_demo(
-            eval_item,
-            template=template,
-            ndoc=n_doc,
-            doc_prompt=doc_prompt,
-            instruction=None,
-            use_shorter=use_shorter,
-            test=True
-        )
-    return text_input
 
 
 

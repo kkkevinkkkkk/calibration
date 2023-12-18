@@ -13,6 +13,7 @@ from tqdm import tqdm
 import sys
 import logging
 from pipeline import EvaluationPipeline, pipeline_init
+from utils import NERModel
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S')
@@ -517,6 +518,7 @@ def compute_qampari_f1(data, cot=False):
     rec_top5 = []
     f1 = []
     f1_top5 = []
+    ner_model = NERModel()
 
     num_preds = []
     for item in data:
@@ -527,8 +529,10 @@ def compute_qampari_f1(data, cot=False):
                 o = ""
         else:
             o = item['output']
-        preds = [normalize_answer(x.strip()) for x in o.rstrip().rstrip(".").rstrip(",").split(",")]
-        preds = [p for p in preds if len(p) > 0] # delete empty answers
+        # preds = [normalize_answer(x.strip()) for x in o.rstrip().rstrip(".").rstrip(",").split(",")]
+        # preds = [p for p in preds if len(p) > 0] # delete empty answers
+        preds = ner_model.get_entities_list(o)
+        preds = [normalize_answer(p) for p in preds]
         num_preds.append(len(preds))
         answers = [[normalize_answer(x) for x in ans] for ans in item['answers']]
         flat_answers = [item for sublist in answers for item in sublist]
@@ -611,11 +615,14 @@ def main():
         dataset_name = "eli5"
     elif "asqa" in args.f:
         dataset_name = "asqa"
+    elif "qampari" in args.f:
+        dataset_name = "qampari"
     else:
         raise NotImplementedError
 
     if qampari:
         result.update(compute_qampari_f1(normalized_data, cot=args.cot))
+        metrics.append("qampari")
     if not args.no_rouge:
         result['rougeLsum'] = compute_rouge(normalized_data)
     if args.qa:

@@ -126,7 +126,7 @@ def extract_confidence_distribution(scores, category_num=6):
     return confidence_distribution
 
 def extract_confidence_distribution_lambda(row, confidence_method="self_eval_repetition"):
-    if confidence_method == "self_eval_repetition":
+    if confidence_method in ["self_eval_repetition", "self_eval_repetition_trained"]:
         scores = row["scores_self_eval"]
     elif confidence_method == "self_repetition":
         scores = [row[f"score_repetition{j}"] for j in range(9)]
@@ -145,9 +145,14 @@ def read_predictions_and_results(
         confidence_method="self_eval_repetition",
         model_name="Llama-2-13b-chat-hf",
         path="/usr/xtmp/yh386/calibration/results", ):
-
+    trained_model = True if model_name == "5.0.1" else False
+    if trained_model and confidence_method == "self_eval_repetition":
+        confidence_method = "self_eval_repetition_trained"
     predictions_path_template = "{confidence_method}/{dataset_name}/{model_name}_predictions_100.json"
-    result_path_template = "run/{dataset_name}/{model_name}_predictions_100.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+    if trained_model:
+        result_path_template = predictions_path_template.replace("{confidence_method}", confidence_method)
+    else:
+        result_path_template = "run/{dataset_name}/{model_name}_predictions_100.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
 
     if dataset_name == "asqa":
         task_metric = "qa"
@@ -173,6 +178,7 @@ def read_predictions_and_results(
         "self_verification": "score",
         "self_eval_repetition": "score_self_eval",
         "self_eval_range": "score",
+        "self_eval_repetition_trained": "score_self_eval",
     }
 
 
@@ -185,8 +191,12 @@ def read_predictions_and_results(
     with open(result_path, 'r') as f:
         print(f"load result from {result_path}")
         data_w_scores = json.load(f)
-        scores = {k: v for k, v in data_w_scores.items() if k != "data"}
-        data = data_w_scores["data"]
+        if trained_model:
+            scores = {}
+            data = data_w_scores
+        else:
+            scores = {k: v for k, v in data_w_scores.items() if k != "data"}
+            data = data_w_scores["data"]
 
     df_data = pd.DataFrame(data)
     if "gpt-4_scores" not in df_data.columns:

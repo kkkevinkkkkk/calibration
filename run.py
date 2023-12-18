@@ -11,12 +11,14 @@ from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,
                       SelfVerificationPipeline,
                       SelfRepetitionPipeline, SelfRepetitionSplitPipeline,
                       SelfRepetitionNERPipeline, SelfRepetitionClaimPipeline,
-                      RephraseConsistencyPipeline, RephraseAnswerConsistencyPipeline)
+                      RephraseConsistencyPipeline)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
-from utils import make_head_prompt, make_text_input
+from utils import make_head_prompt, DATASET_PROFILES
 from tqdm import tqdm
+from prompter import Prompter
+
 import sys
 import logging
 
@@ -51,7 +53,6 @@ def main(
         "self_repetition_ner": SelfRepetitionNERPipeline,
         "self_repetition_claim": SelfRepetitionClaimPipeline,
         "rephrase_consistency": RephraseConsistencyPipeline,
-        "rephrase_answer_consistency": RephraseAnswerConsistencyPipeline,
     }
 
     num_return_sequences = args.get("num_return_sequences", 1)
@@ -72,10 +73,12 @@ def main(
     torch.cuda.manual_seed(args.seed)
 
     # Load data
-    prompt_data = json.load(open(args.prompt_file))
+    # prompt_data = json.load(open(args.prompt_file))
+    prompt_data = DATASET_PROFILES[args.dataset_name]
+
     eval_data = json.load(open(args.eval_file))
     if args.get("answer_file", None) is not None:
-        eval_data = pd.read_json(args.answer_file)['data']
+        eval_data = pd.read_json(args.answer_file)['data'].to_list()
 
 
     if args.sample_num > 0:
@@ -87,31 +90,23 @@ def main(
     else:
         args.sample_num = len(eval_data)
 
+    prompter_ = Prompter(prompt_data=prompt_data,
+                        n_shot=args.n_shot,
+                        n_doc=args.n_doc,
+                        n_doc_in_demo=args.n_doc_in_demo,
+                        fewer_doc_in_demo=args.fewer_doc_in_demo,
+                        no_doc_in_demo=args.no_doc_in_demo,
+                        use_shorter=args.use_shorter,
+                        dataset_name=args.dataset_name,
+                        model_name=args.model,
+                        )
 
-    head_prompt = make_head_prompt(prompt_data,
-                                   n_shot=args.n_shot,
-                                   n_doc=args.n_doc,
-                                   n_doc_in_demo=args.n_doc_in_demo,
-                                   fewer_doc_in_demo=args.fewer_doc_in_demo,
-                                   no_doc_in_demo=args.no_doc_in_demo,
-                                   use_shorter=args.use_shorter,)
 
 
     for idx, eval_item in tqdm(enumerate(eval_data)):
-        prompt_kwargs = dict(
-            head_prompt=head_prompt,
-            model_name=args.model,
-            n_doc=args.n_doc,
-            template=prompt_data["demo_prompt"],
-            doc_prompt=prompt_data["doc_prompt"],
-            instruction=None,
-            use_shorter=args.use_shorter,
-            test=True,
-            dataset_name=args.dataset_name
-        )
-        text_input = make_text_input(eval_item,
-                                     **prompt_kwargs)
-
+        text_input = prompter_.generate_text_input(task_type="main",
+                                                  eval_item=eval_item,
+                                                  )
         eval_data[idx]['text_input'] = text_input
 
         if idx == 0:
@@ -137,8 +132,6 @@ def main(
                                                               question=eval_item["question"],
                                                               dataset_name=args.dataset_name,
                                                               other_answers=other_answers,
-                                                              prompt_func=make_text_input,
-                                                              prompt_kwargs=prompt_kwargs,
                                                               )
         eval_item.update(confidence_output)
 

@@ -19,14 +19,15 @@ import re
 from accelerate import Accelerator
 from utils import TEMPLATES
 from datasets import Dataset
-
+from prompter import Prompter
 
 def process_data(data, dataset_name):
     dataset = []
+    prompter_ = Prompter(model_name="meta-llama/Llama-2-13b-chat-hf", dataset_name=dataset_name)
+
     for i, eval_item in data.iterrows():
-        template = TEMPLATES["chat"][f'self_eval_categorical_{dataset_name}']
-        # template = TEMPLATES["chat"][f'self_eval_categorical_examples_{dataset_name}']
-        prompt = template.replace("{question}", eval_item['question']).replace("{answer}", eval_item['generated_text'])
+
+        prompt = prompter_.generate_text_input(task_type="self_eval", question=eval_item['question'], answer=eval_item['generated_text'])
         prompt += "\n" + eval_item['gpt-4_comment'] + ' </s>'
         dataset.append({"text": prompt})
     dataset_df = pd.DataFrame(dataset)
