@@ -529,10 +529,12 @@ def compute_qampari_f1(data, cot=False):
                 o = ""
         else:
             o = item['output']
-        # preds = [normalize_answer(x.strip()) for x in o.rstrip().rstrip(".").rstrip(",").split(",")]
-        # preds = [p for p in preds if len(p) > 0] # delete empty answers
-        preds = ner_model.get_entities_list(o)
-        preds = [normalize_answer(p) for p in preds]
+        preds = [normalize_answer(x.strip()) for x in o.rstrip().rstrip(".").rstrip(",").split(",")]
+        preds = [p for p in preds if len(p) > 0] # delete empty answers
+
+        # preds = ner_model.get_entities_list(o)
+        # preds = [normalize_answer(p) for p in preds]
+
         num_preds.append(len(preds))
         answers = [[normalize_answer(x) for x in ans] for ans in item['answers']]
         flat_answers = [item for sublist in answers for item in sublist]
@@ -548,6 +550,11 @@ def compute_qampari_f1(data, cot=False):
             f1_top5.append(0) 
         else:
             f1_top5.append(2 * prec[-1] * rec_top5[-1] / (prec[-1] + rec_top5[-1]))
+        item["qampari_prec"] = prec[-1]
+        item["qampari_rec"] = rec[-1]
+        item["qampari_rec_top5"] = rec_top5[-1]
+        item["qampari_f1"] = f1[-1]
+        item["qampari_f1_top5"] = f1_top5[-1]
 
     return {
         "num_preds": np.mean(num_preds),
@@ -556,6 +563,7 @@ def compute_qampari_f1(data, cot=False):
         "qampari_rec_top5": 100 * np.mean(rec_top5),
         "qampari_f1": 100 * np.mean(f1),
         "qampari_f1_top5": 100 * np.mean(f1_top5),
+        'data': data
     }
 
 def main():

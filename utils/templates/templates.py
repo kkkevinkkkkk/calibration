@@ -82,6 +82,27 @@ Answer: {answer}
 Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.
 '''
 
+template_self_eval_categorical_examples_doc = '''{task_instruction}
+
+You will be given a question, relevant documents for reference, and a student's answer. Please evaluate the student's answer, and provide a score from 0-5 to the student's answer based on the following scoring criterion:
+
+{criterion}
+
+Here are some examples.
+
+{examples}
+
+Now it's your turn.
+
+Question: {question}
+
+Documents: {documents}
+
+Answer: {answer}
+
+Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.
+'''
+
 template_self_eval_categorical = '''{task_instruction}
 
 You will be given a question, and a student's answer. Please evaluate the student's answer, and provide a score from 0-5 to the student's answer based on the following scoring criterion:
@@ -146,6 +167,7 @@ TEMPLATES = {
     "repetition": template_repetition,
     "repetition_split": template_repetition_split,
     "self_eval_categorical_examples": template_self_eval_categorical_examples,
+    "self_eval_categorical_examples_doc": template_self_eval_categorical_examples_doc,
     "self_eval_categorical": template_self_eval_categorical,
     "self_eval_range": template_self_eval_range,
     "choose_entities": template_choose_entities,

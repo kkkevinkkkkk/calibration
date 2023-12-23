@@ -6,6 +6,8 @@ import os
 import json
 from math import ceil
 from scipy.stats import wasserstein_distance
+import matplotlib.pyplot as plt
+from scipy import stats
 
 def print_info(item, self_eval=False, gpt_eval=False):
     print("************Question**********")
@@ -126,7 +128,7 @@ def extract_confidence_distribution(scores, category_num=6):
     return confidence_distribution
 
 def extract_confidence_distribution_lambda(row, confidence_method="self_eval_repetition"):
-    if confidence_method in ["self_eval_repetition", "self_eval_repetition_trained"]:
+    if confidence_method.startswith("self_eval_repetition"):
         scores = row["scores_self_eval"]
     elif confidence_method == "self_repetition":
         scores = [row[f"score_repetition{j}"] for j in range(9)]
@@ -145,19 +147,20 @@ def read_predictions_and_results(
         confidence_method="self_eval_repetition",
         model_name="Llama-2-13b-chat-hf",
         path="/usr/xtmp/yh386/calibration/results", ):
-    trained_model = True if model_name == "5.0.1" else False
+    # trained_model = True if model_name.startswith('5')  else False
+    trained_model = True if confidence_method.endswith("trained") else False
     if trained_model and confidence_method == "self_eval_repetition":
         confidence_method = "self_eval_repetition_trained"
     predictions_path_template = "{confidence_method}/{dataset_name}/{model_name}_predictions_100.json"
-    if trained_model:
-        result_path_template = predictions_path_template.replace("{confidence_method}", confidence_method)
-    else:
-        result_path_template = "run/{dataset_name}/{model_name}_predictions_100.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
 
+    final_metric = "gpt-4_score"
     if dataset_name == "asqa":
         task_metric = "qa"
     elif dataset_name == "eli5":
         task_metric = "claims_nli"
+    elif dataset_name == "qampari":
+        task_metric = "qampari_f1_top5"
+        final_metric = task_metric
     else:
         raise NotImplementedError
 
@@ -165,6 +168,17 @@ def read_predictions_and_results(
                                                         dataset_name=dataset_name,
                                                         model_name=model_name)
     predictions_path = os.path.join(path, predictions_path)
+
+    if trained_model:
+        result_path_template = predictions_path_template.replace("{confidence_method}", confidence_method)
+    else:
+        if dataset_name == "qampari":
+            result_path_template = "run/{dataset_name}/{model_name}_predictions_100.json.qampari.score"
+        elif confidence_method .endswith("_3shot_3doc"):
+            confidence_method = confidence_method.replace("_3shot_3doc", "")
+            result_path_template = "run_3shot_3doc/{dataset_name}/{model_name}_predictions_100.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+        else:
+            result_path_template = "run/{dataset_name}/{model_name}_predictions_100.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
     result_path = result_path_template.format(dataset_name=dataset_name,
                                                 model_name=model_name,
                                                 task_metric=task_metric)
@@ -199,14 +213,19 @@ def read_predictions_and_results(
             data = data_w_scores["data"]
 
     df_data = pd.DataFrame(data)
-    if "gpt-4_scores" not in df_data.columns:
-        df_data["gpt-4_scores"] = df_data.apply(lambda row: [row[f'gpt-4_score_{i}'] for i in range(5)], axis=1)
-    confidence_distributions = []
-    for gpt4_scores in df_data["gpt-4_scores"]:
-        confidence_distribution = extract_confidence_distribution(gpt4_scores)
-        confidence_distributions.append(confidence_distribution)
-    df_data["gpt-4_confidence_distribution"] = confidence_distributions
-    print(scores)
+    if final_metric == "gpt-4_score":
+        if "gpt-4_scores" not in df_data.columns:
+            df_data["gpt-4_scores"] = df_data.apply(lambda row: [row[f'gpt-4_score_{i}'] for i in range(5)], axis=1)
+        confidence_distributions = []
+        for gpt4_scores in df_data["gpt-4_scores"]:
+            confidence_distribution = extract_confidence_distribution(gpt4_scores)
+            confidence_distributions.append(confidence_distribution)
+        df_data["gpt-4_confidence_distribution"] = confidence_distributions
+        df_data["correctness_distribution"] = df_data["gpt-4_confidence_distribution"]
+        print(scores)
+    else:
+        df_data["correctness_distribution"] = df_data.apply(
+            lambda row: extract_confidence_distribution([row[final_metric]*100]), axis=1)
 
     df_pred["confidence_distribution"] = df_pred.apply(
         lambda row: extract_confidence_distribution_lambda(row, confidence_method),
@@ -217,7 +236,12 @@ def read_predictions_and_results(
 
     df_pred["expected_confidence"] = df_pred["confidence_distribution"].apply(
         lambda x: sum([i / 5 * x[i] for i in range(6)]))
-    df_data["expected_correctness"] = df_data["gpt-4_score"] / 100
+    if final_metric == "gpt-4_score":
+        df_data["expected_correctness"] = df_data["gpt-4_score"] / 100
+        df_data["correctness_score"] = df_data["gpt-4_score"]
+    else:
+        df_data["expected_correctness"] = df_data[final_metric]
+        df_data["correctness_score"] = df_data[final_metric] * 100
     return df_pred, df_data, scores
 
 def selective_answering_distributed(confidence_distributions, conf_threshold=1, score_threshold=1):
@@ -246,9 +270,9 @@ def selective_answering_analyze(df_pred, df_data):
         for score_threshold in [0.6, 0.8, 1.0]:
             total_select = selective_answering_distributed(df_pred["confidence_distribution"], conf_threshold,
                                                            score_threshold)
-            select_num, score = np.sum(total_select), np.mean((df_data[total_select]["gpt-4_score"]))
-            covered_num = np.sum(np.array(df_data["gpt-4_score"] >= 100*score_threshold) & np.array(total_select))
-            total_num = np.sum(np.array(df_data["gpt-4_score"] >=100 *score_threshold))
+            select_num, score = np.sum(total_select), np.mean((df_data[total_select]["correctness_score"]))
+            covered_num = np.sum(np.array(df_data["correctness_score"] >= 100*score_threshold) & np.array(total_select))
+            total_num = np.sum(np.array(df_data["correctness_score"] >=100 *score_threshold))
 
             precision = covered_num / select_num
             recall = covered_num / total_num
@@ -266,17 +290,17 @@ def selective_answering_analyze(df_pred, df_data):
     df_singular_calibration = [{}]
     for conf_threshold in [0.6, 0.8, 1.0]:
         total_select = selective_answering_singular(df_pred["score"], conf_threshold)
-        select_num, score = np.sum(total_select), np.mean((df_data[total_select]["gpt-4_score"]))
-        covered_num = np.sum(np.array(df_data["gpt-4_score"] >= 100 * conf_threshold) & np.array(total_select))
-        total_num = np.sum(np.array(df_data["gpt-4_score"] >= 100 * conf_threshold))
+        select_num, score = np.sum(total_select), np.mean((df_data[total_select]["correctness_score"]))
+        covered_num = np.sum(np.array(df_data["correctness_score"] >= 100 * conf_threshold) & np.array(total_select))
+        total_num = np.sum(np.array(df_data["correctness_score"] >= 100 * conf_threshold))
         precision = covered_num / select_num
         recall = covered_num / total_num
         f1 = round(2 * precision * recall / (precision + recall), 2)
         result = f"{round(score, 2)}({covered_num}/{select_num})({covered_num}/{total_num})({f1})"
         df_singular_calibration[0][conf_threshold] = result
     df_singular_calibration = pd.DataFrame(df_singular_calibration)
-    print(df_singular_calibration)
-    print()
+    # print(df_singular_calibration)
+    # print()
 
 
 
@@ -284,11 +308,12 @@ def analyze(
         df_pred, df_data):
     selective_answering_analyze(df_pred, df_data)
     score_columns = ["gpt-4_score"]
+    score_columns = ["correctness_score"]
 
     similarity_scores = []
     for i in range(len(df_pred)):
         distribution1 = df_pred["confidence_distribution"][i]
-        distribution2 = df_data["gpt-4_confidence_distribution"][i]
+        distribution2 = df_data["correctness_distribution"][i]
         distance = wasserstein_distance(range(6), range(6), distribution1, distribution2) / 5
         # print(distribution1, distribution2, distance)
         similarity = 1 - distance
@@ -302,4 +327,13 @@ def analyze(
     print("correlation")
     print(df_score.corr())
     print()
+
+    confidence = df_pred['expected_confidence']
+    correctness = df_data['expected_correctness']
+    slope, intercept, r_value, p_value, std_err = stats.linregress(correctness, confidence)
+    label_name = f"r={round(r_value, 2)}"
+    plt.scatter(correctness, confidence, s=5, label=label_name)
+    plt.xlabel("correctness")
+    plt.ylabel("confidence")
+
     return similarity_scores

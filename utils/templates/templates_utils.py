@@ -39,7 +39,7 @@ def get_shorter_text(item, docs, ndoc, key):
 
 
 def make_demo(item, template,
-              ndoc=None,
+              n_doc=None,
               doc_prompt=None,
               instruction=None,
               use_shorter=None,
@@ -58,10 +58,10 @@ def make_demo(item, template,
     else:
         prompt = template.replace("{INST}", instruction).replace("{Q}", item['question'])
     if "{D}" in prompt:
-        if ndoc == 0:
+        if n_doc == 0:
             prompt = prompt.replace("{D}\n", "") # if there is no doc we also delete the empty line
         else:
-            doc_list = get_shorter_text(item, item["docs"], ndoc, use_shorter) if use_shorter is not None else item["docs"][:ndoc]
+            doc_list = get_shorter_text(item, item["docs"], n_doc, use_shorter) if use_shorter is not None else item["docs"][:n_doc]
             text = "".join([make_doc_prompt(doc, doc_id, doc_prompt, use_shorter=use_shorter) for doc_id, doc in enumerate(doc_list)])
             prompt = prompt.replace("{D}", text)
 
@@ -96,7 +96,7 @@ def make_head_prompt(prompt_data: dict,
             assert n_doc_in_demo is not None
             n_doc = n_doc_in_demo
         head_prompt += make_demo(
-            train_item, template=prompt_data["demo_prompt"], ndoc=n_doc, doc_prompt=prompt_data["doc_prompt"],
+            train_item, template=prompt_data["demo_prompt"], n_doc=n_doc, doc_prompt=prompt_data["doc_prompt"],
             instruction=None, use_shorter=use_shorter
         )
         head_prompt += prompt_data["demo_sep"]

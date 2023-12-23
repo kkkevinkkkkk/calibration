@@ -336,7 +336,7 @@ class EvaluationPipeline(MyPipeline):
                         use_examples=True, five_pnt=False, temperature=0,
                         **kwargs):
         inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
-            question=question, answer=answer, reference_answer=gold_answer, task_type="evaluation")
+            question=question, answer=answer, reference_answer=gold_answer, task_type="eval")
 
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
@@ -507,6 +507,7 @@ class SelfRepetitionClaimPipeline(SelfRepetitionPipeline):
         scores = []
         outputs = {}
         sentences_hits = []
+        assert len(other_answers) > 0
         for i, answer_ in enumerate(other_answers):
             output = self.evaluate_repetition(answer, answer_, question)
             scores.append(output["score"])
@@ -541,12 +542,14 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
             print("Warning!!! Didn't find enough entities in comment:", chosen_entities_text)
         return entity_groups
 
-    def evaluate_repetition(self, answer1, answer2, question, entity_num=5, entity_groups=None, **kwargs):
+    def evaluate_repetition(self, answer1, answer2, question, entity_num=5, entity_groups=None, dataset_name="asqa", **kwargs):
         if entity_groups is None:
-            entity_groups = self.get_entity_groups(question, entity_num=entity_num)
+            # entity_groups = self.get_entity_groups(question, entity_num=entity_num)
+            entity_groups = list(self.ner_model.entity_groups.keys()) + ["ALL"]
 
-        entities_dict1 = self.ner_model.get_entities_dict(answer1)
-        entities_dict2 = self.ner_model.get_entities_dict(answer2)
+        split = True if dataset_name == "qampari" else False
+        entities_dict1 = self.ner_model.get_entities_dict(answer1, split)
+        entities_dict2 = self.ner_model.get_entities_dict(answer2, split)
 
         total_num = 0
         overlap_num = 0
@@ -562,6 +565,7 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
             score = 0
         else:
             score = overlap_num / total_num * 100
+        # print(total_num, overlap_num)
 
         # turn set into list
         entities_dict1 = {k: list(v) for k, v in entities_dict1.items()}
@@ -581,7 +585,7 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
         outputs = {}
         results_dict = defaultdict(list)
         for i, answer_ in enumerate(other_answers):
-            output = self.evaluate_repetition(answer, answer_, question)
+            output = self.evaluate_repetition(answer, answer_, question, dataset_name=dataset_name)
             scores.append(output["score"])
             results_dict['overlap_entities'].append(output["overlap_entities"])
             results_dict['entities_dicts1'].append(output["entities_dict1"])
@@ -614,10 +618,16 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
                                  dataset_name="asqa",
                                  temperature=0.6,
                                  num_return_sequences=10,
-                                 five_pnt=True, **kwargs):
+                                 five_pnt=True, n_doc=0, **kwargs):
         if five_pnt:
-            inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
-                question=question, answer=answer, task_type="self_eval")
+            if n_doc > 0:
+                inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name,
+                                  n_doc=n_doc).generate_text_input(
+                    question=question, answer=answer, task_type="self_eval_doc", eval_item=kwargs["eval_item"],)
+            else:
+                inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
+                    question=question, answer=answer, task_type="self_eval")
+
         else:
             raise NotImplementedError
         outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)

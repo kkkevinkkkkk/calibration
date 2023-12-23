@@ -1,6 +1,7 @@
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 from span_marker import SpanMarkerModel
 from collections import defaultdict
+from .utils import normalize_answer
 
 class NERModel:
     # options for model_name:
@@ -104,11 +105,17 @@ class NERModel:
         else:
             return self.model(text, *args, **kwargs)
 
-    def get_entities_dict(self, text):
+    def get_entities_dict(self, text, split=False):
         entities_dict = defaultdict(set)
+        if split:
+            entities_list = [normalize_answer(entity) for entity in text.split(",")]
+            for entity in entities_list:
+                entities_dict["ALL"].add(entity)
+            return entities_dict
         entities = self.__call__(text)
         for entity in entities:
-            entities_dict[entity["entity_group"]].add(entity["word"].lower())
+            # entities_dict[entity["entity_group"]].add(entity["word"].lower())
+            entities_dict[entity["entity_group"]].add(normalize_answer(entity["word"]))
 
         return entities_dict
     def get_entities_list(self, text):

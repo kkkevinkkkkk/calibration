@@ -35,7 +35,7 @@ class Prompter:
                                                 use_shorter=self.use_shorter, )
 
         text_input = self.head_prompt + make_demo(eval_item,
-                                                  ndoc=self.n_doc_in_demo,
+                                                  n_doc=self.n_doc,
                                                   template=self.prompt_data["demo_prompt"],
                                                   doc_prompt=self.prompt_data["doc_prompt"],
                                                   instruction=None,
@@ -64,6 +64,20 @@ class Prompter:
                 question=kwargs["question"],
                 answer=kwargs["answer"],
             )
+        elif task_type == "self_eval_doc":
+            assert "eval_item" in kwargs and "question" in kwargs and "answer" in kwargs
+            doc_prompt = "Document [{ID}](Title: {T}): {P}\n"
+            doc_text = make_demo(kwargs["eval_item"], template="{D}\n", n_doc=self.n_doc, doc_prompt=doc_prompt, )
+            text_input = TEMPLATES["self_eval_categorical_examples_doc"].format(
+                task_instruction=dataset_profile["eval_instruction"],
+                criterion=dataset_profile["criterion"],
+                examples=dataset_profile["eval_examples_categorical"],
+                question=kwargs["question"],
+                documents=doc_text,
+                answer=kwargs["answer"],
+            )
+
+
         elif task_type == "self_eval_range":
             assert "question" in kwargs and "answer" in kwargs
 

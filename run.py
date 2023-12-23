@@ -75,6 +75,7 @@ def main(
     # Load data
     # prompt_data = json.load(open(args.prompt_file))
     prompt_data = DATASET_PROFILES[args.dataset_name]
+    do_n_doc = True if args.n_doc > 0 else False
 
     eval_data = json.load(open(args.eval_file))
     if args.get("answer_file", None) is not None:
@@ -100,7 +101,6 @@ def main(
                         dataset_name=args.dataset_name,
                         model_name=args.model,
                         )
-
 
 
     for idx, eval_item in tqdm(enumerate(eval_data)):
@@ -132,6 +132,8 @@ def main(
                                                               question=eval_item["question"],
                                                               dataset_name=args.dataset_name,
                                                               other_answers=other_answers,
+                                                              eval_item=eval_item,
+                                                              n_doc=0 if not do_n_doc else args.n_doc,
                                                               )
         eval_item.update(confidence_output)
 

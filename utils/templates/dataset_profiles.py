@@ -4,7 +4,7 @@ asqa = {
     "criterion": "5 - Completely Correct and Highly Relevant: The answer fully addresses the question, resolves the ambiguity, and provides a well-rounded resolution. All facts presented in the answer are accurate and relevant.\n4 - Mostly Correct and Relevant: The answer is very relevant and addresses the ambiguity well, but might have a minor oversight or inaccuracy. All the facts presented are accurate and relevant, or with only minor errors.\n3 - Partially Correct and Relevant: The answer is generally on topic and attempts to address the ambiguity, but there might be inaccuracies or omissions. The majority of the facts are correct, with a few errors.\n2 - Flawed but Somewhat Relevant: The answer somewhat addresses the topic but does not fully explore the question's ambiguity or does not provide a complete resolution. The facts presented are a mix of correct and incorrect information, with about half being accurate.\n1 - Mostly Incorrect or Mostly Irrelevant: The answer slightly touches upon the topic but misses the main point. The majority of the facts presented are incorrect, with only a small portion being accurate.\n0 - Completely Incorrect or Completely Irrelevant: The student's answer is completely off-topic, not related to the question at all, or contains only incorrect information.\n",
     "eval_examples_categorical": 'Example 1: \n\nQuestion: "Who plays patrick in 10 things i hate about you?"\n\nAnswer: "The character Patrick Verona in the 1999 film 10 Things I Hate About You is played by Heath Ledger. Heath Ledger was an Australian actor and director, best known for his roles in films such as The Dark Knight, Brokeback Mountain, and A Knight\'s Tale."\n\nComment: "Score: 3/5\n\nExplanation: The student correctly identified Heath Ledger as Patrick in the 1999 film but did not address the 2009 TV show where Ethan Peck played Patrick, leaving the answer incomplete in addressing the question\'s ambiguity."\n\nExample 2:\n\nQuestion: "Who conducted a 300 mile march to sacramento california?"\n\nAnswer: "There have been several marches to Sacramento, California, but the 1965 Selma to Montgomery marches in Alabama, led by Martin Luther King Jr., are among the most notable. These marches demanded voting rights for African Americans and culminated in the Voting Rights Act of 1965."\n\nComment: "Score: 0/5\n\nExplanation: The student\'s answer focuses on the Selma to Montgomery marches in Alabama, which are not related to the question about a 300-mile march to Sacramento, California. While the student\'s information about the Selma to Montgomery marches is accurate, it does not address the given question."\n\nExample 3:\n\nQuestion: "What’s the capital of Georgia?"\n\nAnswer: "The capital of Georgia (U.S. state) is Atlanta, while the capital of Georgia (country) is Tbilisi."\n\nComment: "Score: 5/5\n\nExplanation: The student\'s answer accurately identifies both capitals of Georgia: Atlanta for the U.S. state and Tbilisi for the country. It is concise and directly addresses the ambiguity in the question." \n',
     "demo_sep": "\n\n\n",
-    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\nAnswer: {A}",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
     "doc_prompt": "Document [{ID}](Title: {T}): {P}\n",
     "demos": [
         {
@@ -122,7 +122,7 @@ eli5 = {
     "criterion": "5 - Perfectly Addressed, Accurate and Clarity: The answer flawlessly addresses the question with exceptional accuracy and clarity. It simplifies complex concepts effectively and does so in a way that is captivating and memorable.\n4 - Accurate and clear: The answer is accurate, relevant to the question, and presented in a way that is engaging and understandable. It simplifies complex concepts effectively but may miss a small opportunity for further clarification or engagement.\n3 - Moderately Accurate and Understandable: The answer is mostly accurate and somewhat understandable. It addresses the question reasonably well but may lack detail or contain some inaccuracies. It may use complex terms or concepts that are not broken down into simpler ideas. \n2 - Relevant but Lacks Clarity or Accuracy: The answer is related to the question but lacks clarity or contains partial inaccuracies. It attempts to simplify the idea but does not do so effectively, leaving room for confusion or misunderstanding.\n1 - Significantly Flawed: The answer addresses the question to a minimal extent but contains significant inaccuracies or misleading information. It might show a basic attempt to simplify the concept but fail in accuracy or relevance.\n0 - Completely Inaccurate or Irrelevant: The answer is entirely off-topic, irrelevant, or factually incorrect. It fails to address the question and does not simplify complex ideas.\n",
     "eval_examples_categorical": 'Example 1:\n\nQuestion: "why are things ___.99 and they dont just round up?"\n\nAnswer:  "Stores often price items at $4.99 or $9.99 instead of rounding up to the nearest dollar because of "cents." Cents are smaller units of money like pennies. Stores use these cents to manage their finances, ensuring they have enough money for necessary expenses. This pricing strategy is a common practice in retail, and it can sometimes lead to finding items on sale for even less! It\'s a unique way adults handle money, and one day, you might do the same."\n\nComment: "Score: 0/5\nExplanation: The answer fails to address the core concept of the question, which is the psychological impact of .99 pricing on consumer perception. Instead, it discusses the use of cents in retail pricing for financial management, which is not relevant to the question about why prices are often set just below a round number. Therefore, the answer is given a score of 0 for its lack of factual accuracy and relevance to the specific question asked."\n\nExample 2:\n\nQuestion: "Why is second day chili better? "\n\nAnswer: "Second day chili tastes better because the flavors have more time to meld and intensify. As it rests, the spices and ingredients infuse more deeply, creating a richer and more harmonious flavor when reheated."\n\nComment: "Score: 5/5\nExplanation: The answer effectively conveys why second day chili might taste better. It explains that the flavors have more time to meld and intensify, which is a valid point. The idea that spices and ingredients infuse more deeply over time, creating a richer and more harmonious flavor, is accurate and relevant to the question. This explanation aligns well with the general understanding of how flavors develop in dishes like chili over time."\n\nExample 3:\n\nQuestion: "Why is it that I\'ve lost weight by the time I have awaken in the morming, yet I haven\'t gone to the washroom? Where did all of the weight go? "\n\nAnswer: "When we sleep, our bodies perform a neat trick – they slightly shrink! This happens because our bodies don\'t need as much energy while we\'re resting, so they use this time for a bit of weight-loss magic. That\'s why you might feel lighter in the morning, even before visiting the bathroom. Remember, your body is capable of some amazing things while you sleep! "\n\nComment: "Score: 1/5\nExplanation: The answer is creative but factually inaccurate. It suggests the body "shrinks" and performs "weight-loss magic" during sleep, which is not scientifically correct. The key point is that weight loss overnight is due to exhaling carbon dioxide, which was not mentioned in the response. Therefore, while engaging for young listeners, the answer is misleading and lacks relevance to the actual process of weight loss during sleep. "\n',
     "demo_sep": "\n\n\n",
-    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\nAnswer: {A}",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
     "doc_prompt": "Document [{ID}](Title: {T}): {P}\n",
     "demos": [
         {
@@ -237,6 +237,115 @@ qampari = {
     "eval_instruction": "A student has been asked to provide a list of accurate answers for a given question. The answers is seperated by commas.",
     "criterion": "TODO",
     "eval_examples_categorical": 'TODO',
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "doc_prompt": "Document [{ID}](Title: {T}): {P}\n",
+    "demos": [
+        {
+            "question": "Which books were written by Nevil Shute?",
+            "answer": "Marazan, Stephen Morris, Beyond the Black Stump, Lonely Road, The Chequer Board, In the Wet, Trustee from the Toolroom, Round the Bend, No Highway, Ruined City, On the Beach.",
+            "docs": [
+                {
+                    "title": "Nevil Shute",
+                    "text": "early stages. My congratulations.\" His celebrity as a writer caused the Ministry of Information to send him to the Normandy Landings on 6 June 1944 and later to Burma as a correspondent. He finished the war with the rank of lieutenant commander in the Royal Navy Volunteer Reserves (RNVR). Shute's first novel, \"Stephen Morris\", was written in 1923, but not published until 1961. His first published novel was \"Marazan\", which came out in 1926. After that he averaged one novel every two years through the 1950s, with the exception of a six-year hiatus while he was establishing his own aircraft"
+                },
+                {
+                    "title": "Nevil Shute",
+                    "text": "theme is the bridging of social barriers such as class (\"Lonely Road\" and \"Landfall\"), race (\"The Chequer Board\"), or religion (\"Round the Bend\"). The Australian novels are individual hymns to that country, with subtle disparagement of the mores of the United States (\"Beyond the Black Stump\") and overt antipathy towards the post-World War II socialist government of Shute's native Britain (\"The Far Country\" and \"In the Wet\"). Shute's heroes tended to be like himself: middle class solicitors, doctors, accountants, bank managers, engineers, generally university graduates. However (as in \"Trustee from the Toolroom\"), Shute valued the honest artisans and their social"
+                },
+                {
+                    "title": "Nevil Shute",
+                    "text": "construction company, Airspeed Ltd. His popularity grew slowly with each novel, but he became much more famous after the publication of \"On the Beach\" in 1957. Shute's novels are written in a simple, highly readable style, with clearly delineated plot lines. Where there is a romantic element, sex is referred to only obliquely. Many of the stories are introduced by a narrator who is not a character in the story. The most common theme in Shute's novels is the dignity of work, spanning all classes, whether an Eastern European bar \"hostess\" (\"Ruined City\") or brilliant boffin (\"No Highway\"). Another recurrent"
+                },
+                {
+                    "title": "The Chequer Board",
+                    "text": "the Burmese people\", both of which are central to the book's story. Shute was concerned that sales of the book in the United States would be negatively impacted by the book's open-minded handling of racial issues; as it turned out, sales soared. Shute and his wife traveled the U.S. on Greyhound buses to \"\"get in touch with the man on the street,\"\" finding the experience refreshing. Afterwards he wrote \"\"Sincerity is the first attribute for making money in the business of writing novels.\"\" The Chequer Board The Chequer Board is a novel by Nevil Shute, first published in the United"
+                },
+                {
+                    "title": "In the Wet",
+                    "text": "had used the idea of multiple votes for merit in his short story \"The Curious Republic of Gondour\". In the Wet In The Wet is a novel by Nevil Shute that was first published in the United Kingdom in 1953. It contains many of the typical elements of a hearty and adventurous Shute yarn such as flying, the future, mystic states, and ordinary people doing extraordinary things. The story is opened by its initial narrator \u2013 an Anglican priest in the Bush Brotherhood named Roger Hargreaves \u2013 who describes his ordinary circumstances in a large parish of the Australian outback"
+                }
+            ]
+        },
+        {
+            "question": "Which film has Gong Li as a member of its cast?",
+            "answer": "The Story of Qiu Ju, Farewell My Concubine, Flirting Scholar, The Monkey King 2, Mulan, Saturday Fiction, Coming Home.",
+            "docs": [
+                {
+                    "title": "Gong Li",
+                    "text": "Gong Li Gong Li (born 31 December 1965) is a Chinese-born Singaporean film actress. She achieved international prominence through her close collaborations with Chinese director Zhang Yimou and won the Volpi Cup for Best Actress at Venice for her performance in his 1992 film \"The Story of Qiu Ju\". She has been credited with helping to bring Chinese cinema to prominence in Europe and the United States. In 2006, she was voted the most beautiful woman in China. Gong has won numerous accolades for her work as an actress; she won the New York Film Critics Circle Award for Best"
+                },
+                {
+                    "title": "Gong Li",
+                    "text": "making her realize that she has assisted the dark cynical system. In 1993, she received a New York Film Critics Circle award for her role in \"Farewell My Concubine\" (1993). Directed by Chen Kaige, the film was her first major role with a director other than Zhang Yimou. In the same year, she was awarded with the Berlinale Camera at the 43rd Berlin International Film Festival. \"Premiere\" magazine ranked her performance in \"Farewell My Concubine\" as the 89th greatest performance of all time. She also worked with renowned director Stephen Chow in comedy films \"\" (1991) and \"Flirting Scholar\" (1993)."
+                },
+                {
+                    "title": "Gong Li",
+                    "text": "International Film Festival. Later that same year, she reunited with Zhang Yimou for the film \"Coming Home\", which is set during the throes of the Cultural Revolution; this film was their first collaboration since 2006. In 2016, Gong took on her first action role in \"The Monkey King 2\", playing the White Bone Demon. In 2018, Gong was cast in Lou Ye's period drama \"Saturday Fiction\", where she plays an actress who is working undercover gathering intelligence for the Allies. That year, she was also cast in the live-action adaptation of the 1998 Disney animated film \"Mulan\", as an unspecified"
+                },
+                {
+                    "title": "Zhang Yimou",
+                    "text": "in Zhang's earlier films. \"Raise the Red Lantern\" was nominated in the Best Foreign Language Film category at the 1992 Academy Awards, becoming the second Chinese film to earn this distinction (after Zhang's \"Ju Dou\"). It eventually lost out to Gabriele Salvatores's \"Mediterraneo\". Zhang's next directorial work, \"The Story of Qiu Ju\", in 1992, once again starring Gong Li in the lead role. The film, which tells the tale of a peasant woman seeking justice for her husband after he was beaten by a village official, was a hit at film festivals and won the Golden Lion award at the"
+                },
+                {
+                    "title": "Gong Li",
+                    "text": "Gong Li Gong Li (born 31 December 1965) is a Chinese-born Singaporean film actress. She achieved international prominence through her close collaborations with Chinese director Zhang Yimou and won the Volpi Cup for Best Actress at Venice for her performance in his 1992 film \"The Story of Qiu Ju\". She has been credited with helping to bring Chinese cinema to prominence in Europe and the United States. In 2006, she was voted the most beautiful woman in China. Gong has won numerous accolades for her work as an actress; she won the New York Film Critics Circle Award for Best"
+                }
+            ]
+        },
+        {
+            "question": "In which years did Patti LaBelle publish music?",
+            "answer": "2006, 1977, 2004, 2005, 2000, 2006.",
+            "docs": [
+                {
+                    "title": "The Gospel According to Patti LaBelle",
+                    "text": "The Gospel According to Patti LaBelle The Gospel According to Patti LaBelle is the first gospel album released by singer Patti LaBelle, released in November 2006. This project began three years ago when Patti's late musical director and close friend Budd Ellison told a skeptical LaBelle that \"it's now or never, Patti.\" The album is dedicated to his memory as he succumbed to prostate cancer before the album saw a release. The album was released on November 21, 2006 through indie label Umbrella/Bungalow Records, also home to Carl Thomas, Rodney Jerkins, Dean \"DC\" Charles, and other artists. \"The Gospel According"
+                },
+                {
+                    "title": "Patti LaBelle (album)",
+                    "text": "scaled the high sixties on the \"Billboard\" R&B chart, it soon became one of her famous show-stoppers while performing the song. LaBelle performed the song at her first solo concert in London, getting a standing ovation, which helped to give LaBelle motivation to continue her career. The album, when released, performed successfully, reaching number 62 on the \"Billboard\" 200 and number 31 on the R&B albums chart, while critics hailed the album. Patti LaBelle (album) Patti LaBelle is the debut solo album by singer Patti LaBelle, released in 1977. The first album LaBelle recorded after sixteen years fronting the band"
+                },
+                {
+                    "title": "Patti LaBelle",
+                    "text": "win. In 2000, LaBelle released her final MCA album, \"When a Woman Loves\", before signing with Def Soul Classics to release the 2004 album, \"Timeless Journey\". Following the release of her 2005 covers album, \"Classic Moments\", LaBelle engaged in a rivalry with Antonio \"L.A.\" Reid over the direction of her career, leading to her leaving the label.In the same year, the World Music Awards recognized her years in the music business by awarding her the Legend Award. In 2006, she released her first gospel album, \"The Gospel According to Patti LaBelle\" on the Bungalo label, the album later peaking at"
+                },
+                {
+                    "title": "Patti LaBelle",
+                    "text": "Patti LaBelle Patti LaBelle (born Patricia Louise Holt; May 24, 1944) is an American singer, actress, and entrepreneur. LaBelle began her career in the early 1960s as lead singer and front woman of the vocal group, Patti LaBelle and the Bluebelles. Following the group's name change to Labelle in the early 1970s, they released the iconic disco song \"Lady Marmalade\" and the group later became the first African-American vocal group to land the cover of \"Rolling Stone\" magazine. After the group split in 1976, LaBelle began a successful solo career, starting with her critically acclaimed debut album, which included the"
+                },
+                {
+                    "title": "The Gospel According to Patti LaBelle",
+                    "text": "Billboard's Top Gospel Albums chart for 17 weeks. \"Where Love Begins,\" a duet with Yolanda Adams was played frequently on R&B and gospel radio stations and debuted at #68 on Billboard's Hot R&B/Hip-Hop tracks. The second single \"Anything\" featuring Kanye West, Mary Mary and Consequence hit #64 on Billboards Hot R&B/Hip-Hop tracks. In 2008, the album was nominated for a Dove Award for Contemporary Gospel Album of the Year at the 39th GMA Dove Awards. The Gospel According to Patti LaBelle The Gospel According to Patti LaBelle is the first gospel album released by singer Patti LaBelle, released in November"
+                }
+            ]
+        },
+        {
+            "question": "Glenn Ford was a member of cast in which film?",
+            "answer": "So Ends Our Night, Heaven with a Barbed Wire Fence, Happy Birthday to Me, The Greatest Gift, The Gift, The Brotherhood of the Bell.",
+            "docs": [
+                {
+                    "title": "Glenn Ford",
+                    "text": "name came from his father's hometown of Glenford, Alberta. His first major movie part was in the 1939 film, \"Heaven with a Barbed Wire Fence\". Top Hollywood director John Cromwell was impressed enough with his work to borrow him from Columbia for the independently produced drama, \"So Ends Our Night\" (1941), where Ford delivered a poignant portrayal of a 19-year-old German exile on the run in Nazi-occupied Europe. Working with Academy Award-winning Fredric March and wooing (onscreen) 30-year-old Margaret Sullavan, recently nominated for an Oscar, Ford's shy, ardent young refugee riveted attention even in such stellar company. \"Glenn Ford, a"
+                },
+                {
+                    "title": "Glenn Ford",
+                    "text": "were Westerns. He suggested doing a Western series, instead, which resulted in the \"modern-day Western\" series, \"Cade's County\". Ford played southwestern Sheriff Cade for one season (1971\u20131972) in a mix of police mystery and western drama. In \"The Family Holvak\" (1975\u20131976), Ford portrayed a Depression-era preacher in a family drama, reprising the same character he had played in the TV film, \"The Greatest Gift\". In 1978 Ford was host, presenter and narrator of the disaster documentary series 'When Havoc Struck'. In 1981, Ford co-starred with Melissa Sue Anderson in the slasher film \"Happy Birthday to Me\". In 1991, Ford agreed"
+                },
+                {
+                    "title": "CBS Thursday Night Movie",
+                    "text": "Night Movie\" opened its fall schedule with the premiere of a low-budget, made-for-TV movie, rather than a proven Hollywood blockbuster guaranteed to lure mass viewership, it became CBS's way of declaring its commitment to product that, although cheaply manufactured, was nevertheless new and topical. In this case, the movie was \"The Brotherhood of the Bell\", and the film's star was Glenn Ford, a movie actor who had never appeared in a television-film. In fact, before shooting on the project even began, Ford had been warned by friends in the industry that he would hate the experience. Instead, the actor reported"
+                },
+                {
+                    "title": "The Trouble with Girls (film) ",
+                    "text": "with Charlene, but when she refuses to give in, he deceives her and uses the local police force to be sure that she must leave on the train with the rest of the troupe. Cast notes In June 1959 it was announced that Don Mankiewicz would write a screenplay of an unpublished story by Mauri Grashin, Day Keene, and Dwight Babcock. By December 1960, with the project titled \"Chautauqua\", MGM was ready to make the film with Glenn Ford. Rumours circulating in Hollywood at the time stated that Presley would co-star with Ford, Hope Lange, and Arthur O'Connell, but nothing"
+                },
+                {
+                    "title": "Trouble in the Glen",
+                    "text": "Mel Ferrer. It was Orson Welles' fifth British movie in six months. Filming started 15 December 1953. The film received very poor reviews. Trouble in the Glen Trouble in the Glen is a 1954 British comedy film directed by Herbert Wilcox and starring Margaret Lockwood, Orson Welles, Forrest Tucker and Victor McLaglen. It is loosely based on Maurice Walsh's 1950 novel of the same name. It was filmed in Trucolor for Republic Pictures. After moving from South America to the Scottish Highlands, millionaire Sanin Cejador y Mengues (Welles) reassumes the title of laird of Glen Easan, which he inherited from"
+                }
+            ]
+        }
+    ]
 }
 
 DATASET_PROFILES = {
