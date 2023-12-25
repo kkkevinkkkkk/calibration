@@ -3,21 +3,20 @@ version: 0.0.0
 
 seed: 1
 
-exp_name: debug
-#model: lmsys/vicuna-13b-v1.3
+exp_name: run
 model: meta-llama/Llama-2-7b-chat-hf
 
-confidence_method: self_eval_repetition
+confidence_method: ""
 
 dataset_name: asqa
 prompt_file: templates/asqa_closedbook.json
-eval_file: /usr/xtmp/yh386/datasets/acle/asqa_eval_gtr_top100.json
-save_dir: /usr/xtmp/yh386/calibration
+eval_file: ./datasets/acle/asqa_eval_gtr_top100.json
+save_dir: ./
 sample_num: 1
 num_return_sequences: 1
 
 n_shot: 3
-n_doc: 3
+n_doc: 1
 n_doc_in_demo: 0
 no_doc_in_demo: true
 fewer_doc_in_demo: false
