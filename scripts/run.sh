@@ -1,14 +1,21 @@
-#python run_llama.py \
-#    --ckpt_dir /usr/xtmp/qz124/misinfo_vax_ss23/llama/llama-2-7b/ \
-#    --tokenizer_path --tokenizer_path /usr/xtmp/qz124/misinfo_vax_ss23/llama/tokenizer.model \
-#    --max_seq_len 1024 --max_batch_size 4
+#!/bin/bash
+#SBATCH --job-name=$1    # job name, "OMP_run"
+#SBATCH --partition=nlplab  # partition (queue)
+#SBATCH -t 0-5:00              # time limit: (D-HH:MM)
+#SBATCH --mem=32000            # memory per node in MB
+#SBATCH --nodes=1              # number of nodes
+#SBATCH --ntasks-per-node=1   # number of cores
+#SBATCH --gres=gpu:a6000:1     # numer of GPUs
+#SBATCH --output=log/tmp.out     # file to collect standard output
+#SBATCH --error=log/tmp.err      # file to collect standard errors
 
-#python run.py --model "meta-llama/Llama-2-13b-chat-hf" \
-#       --dataset_name "eli5"
 
-export TRANSFORMERS_CACHE='/usr/xtmp/yh386/.cache/transformers'
-export CUDA_VISIBLE_DEVICES='6'
-CONFIG_PATH="configures/v1.0.0.yml"
+CONFIG_NAME='v1.2.1'
 
+if [ $# -eq 1 ]; then
+    CONFIG_NAME=$1
+fi
+CONFIG_PATH="configures/$CONFIG_NAME.yml"
 
-python run.py --config_path $CONFIG_PATH
+echo $CONFIG_PATH
+python run.py --config_path "$CONFIG_PATH"
