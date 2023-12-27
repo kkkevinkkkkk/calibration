@@ -39,8 +39,8 @@ bash scripts/run.sh
 Result file will be saved in [results/](results) by default. You could change the output path by changing the `save_dir` in the configure file.
 
 ## Evaluation
+To evaluate the correctness of model predictions with GPT-4, you need to first export the openai api key to environment variable `OPENAI_API_KEY`. Then run the following command:
 
-You could get the model predictions produced in previous step with GPT-4 by running:
 ```sh
 bash scripts/eval.sh
 ```
