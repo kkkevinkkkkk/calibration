@@ -10,6 +10,7 @@ class Prompter:
                  fewer_doc_in_demo=False,
                  no_doc_in_demo=True,
                  use_shorter="summary",
+                 oracle_doc=False,
                  ):
 
         self.prompt_data = prompt_data
@@ -21,6 +22,7 @@ class Prompter:
         self.fewer_doc_in_demo = fewer_doc_in_demo
         self.no_doc_in_demo = no_doc_in_demo
         self.use_shorter = use_shorter
+        self.oracle_doc = oracle_doc
 
         self.head_prompt = None
 
@@ -40,7 +42,8 @@ class Prompter:
                                                   doc_prompt=self.prompt_data["doc_prompt"],
                                                   instruction=None,
                                                   use_shorter=self.use_shorter,
-                                                  test=True)
+                                                  test=True,
+                                                  oracle_doc=self.oracle_doc,)
 
         return text_input
 
@@ -65,9 +68,11 @@ class Prompter:
                 answer=kwargs["answer"],
             )
         elif task_type == "self_eval_doc":
-            assert "eval_item" in kwargs and "question" in kwargs and "answer" in kwargs
+            assert "eval_item" in kwargs and "question" in kwargs and "answer" in kwargs and "oracle_doc" in kwargs
             doc_prompt = "Document [{ID}](Title: {T}): {P}\n"
-            doc_text = make_demo(kwargs["eval_item"], template="{D}\n", n_doc=self.n_doc, doc_prompt=doc_prompt, )
+            doc_text = make_demo(kwargs["eval_item"], template="{D}\n",
+                                 n_doc=self.n_doc, doc_prompt=doc_prompt,
+                                 oracle_doc=kwargs["oracle_doc"], test=True)
             text_input = TEMPLATES["self_eval_categorical_examples_doc"].format(
                 task_instruction=dataset_profile["eval_instruction"],
                 criterion=dataset_profile["criterion"],
@@ -132,7 +137,7 @@ class Prompter:
         else:
             raise NotImplementedError
 
-        if "chat" in self.model_name:
+        if "chat" in self.model_name or self.model_name in ["5.0.1"]:
             text_input = TEMPLATES["llama2_chat"].format(task_instruction=text_input)
 
         return text_input

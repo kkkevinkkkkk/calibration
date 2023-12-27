@@ -105,10 +105,11 @@ class NERModel:
         else:
             return self.model(text, *args, **kwargs)
 
-    def get_entities_dict(self, text, split=False):
+    def get_entities_dict(self, text, split=0):
         entities_dict = defaultdict(set)
-        if split:
-            entities_list = [normalize_answer(entity) for entity in text.split(",")]
+        if split > 0:
+            o = text if split == 1 else ':'.join(text.split(":")[1:])
+            entities_list = [normalize_answer(entity) for entity in o.rstrip().rstrip(".").rstrip(",").split(",")]
             for entity in entities_list:
                 entities_dict["ALL"].add(entity)
             return entities_dict

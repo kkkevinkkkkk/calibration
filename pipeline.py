@@ -132,8 +132,8 @@ class MyPipeline(TextGenerationPipeline):
             if token != "<unk>":
                 logprob_sum += np.log(prob)
                 cnt += 1
-        filtered_logprob = filtered_logprob_sum / filtered_cnt
-        logprob = logprob_sum / cnt
+        filtered_logprob = filtered_logprob_sum / filtered_cnt if filtered_cnt > 0 else 0
+        logprob = logprob_sum / cnt if cnt > 0 else 0
         return {"seq_log_prob_average": logprob, "seq_log_prob_filtered": filtered_logprob}
 
     def postprocess(self, model_outputs, return_type=ReturnType.NEW_TEXT, clean_up_tokenization_spaces=True):
@@ -547,24 +547,41 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
             # entity_groups = self.get_entity_groups(question, entity_num=entity_num)
             entity_groups = list(self.ner_model.entity_groups.keys()) + ["ALL"]
 
-        split = True if dataset_name == "qampari" else False
+        split = 0
+        if dataset_name == "qampari":
+            split = 2 if "chat" in self.model_name else 1
         entities_dict1 = self.ner_model.get_entities_dict(answer1, split)
         entities_dict2 = self.ner_model.get_entities_dict(answer2, split)
 
-        total_num = 0
+        total_num_1 = 0
+        total_num_2 = 0
         overlap_num = 0
         overlap_entities = []
         for entity_group in entity_groups:
-            total_num += len(entities_dict1[entity_group])
+            total_num_1 += len(entities_dict1[entity_group])
+            total_num_2 += len(entities_dict2[entity_group])
             for entity in entities_dict1[entity_group]:
                 if entity in entities_dict2[entity_group]:
                     overlap_num += 1
                     overlap_entities.append(entity)
-        if total_num == 0:
+        score_precision = 0
+        score_recall = 0
+        score_f1 = 0
+        if total_num_1 == 0:
             print("Warning!!! Didn't find any entities in answer 1:", answer1, entities_dict1)
             score = 0
+        elif total_num_2 == 0:
+            print("Warning!!! Didn't find any entities in answer 2:", answer2, entities_dict2)
+            score = 0
         else:
-            score = overlap_num / total_num * 100
+            print(f"total_num_1: {total_num_1}, total_num_2: {total_num_2}, overlap_num: {overlap_num}")
+            score_precision = overlap_num / total_num_1 * 100
+            score_recall = overlap_num / total_num_2 * 100
+            if score_precision + score_recall > 0:
+                score_f1 = 2 * score_precision * score_recall / (score_precision + score_recall)
+            else:
+                score_f1 = 0
+            score = score_precision
         # print(total_num, overlap_num)
 
         # turn set into list
@@ -572,6 +589,9 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
         entities_dict2 = {k: list(v) for k, v in entities_dict2.items()}
         output = {
             "score": score,
+            "score_precision": score_precision,
+            "score_recall": score_recall,
+            "score_f1": score_f1,
             "overlap_entities": overlap_entities,
             "entity_groups": entity_groups,
             "entities_dict1": entities_dict1,
@@ -582,11 +602,19 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
     def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
                                  **kwargs):
         scores = []
+        scores_precision = []
+        scores_recall = []
+        scores_f1 = []
+
         outputs = {}
         results_dict = defaultdict(list)
         for i, answer_ in enumerate(other_answers):
             output = self.evaluate_repetition(answer, answer_, question, dataset_name=dataset_name)
             scores.append(output["score"])
+            scores_precision.append(output["score_precision"])
+            scores_recall.append(output["score_recall"])
+            scores_f1.append(output["score_f1"])
+
             results_dict['overlap_entities'].append(output["overlap_entities"])
             results_dict['entities_dicts1'].append(output["entities_dict1"])
             results_dict['entities_dicts2'].append(output["entities_dict2"])
@@ -595,6 +623,14 @@ class SelfRepetitionNERPipeline(SelfRepetitionPipeline):
         outputs["entity_groups"] = output["entity_groups"]
         outputs["score_repetition_ner"] = total_score
         outputs["scores_repetition_ner"] = scores
+
+        outputs["scores_precision"] = scores_precision
+        outputs["scores_recall"] = scores_recall
+        outputs["scores_f1"] = scores_f1
+        outputs["score_precision"] = np.mean(scores_precision)
+        outputs["score_recall"] = np.mean(scores_recall)
+        outputs["score_f1"] = np.mean(scores_f1)
+
         outputs["other_answers"] = other_answers
 
         outputs.update(results_dict)
@@ -605,11 +641,22 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @staticmethod
+    def extract_score(text, pattern=r"(\d+)/100"):
+        match = re.search(pattern, text)
+        if not match:
+            print("Warning!!!", text)
+
+        score = int(match.group(1)) if match else 0
+        return score, match
     def extract_scores(self, text, five_pnt=False):
         if five_pnt:
-            correctness_score = self.extract_score(text, pattern=r"Score: (\d+)/5") * 20
+            correctness_score, match = self.extract_score(text, pattern=r"Score: (\d+)/5")
+            if not match:
+                correctness_score, match = self.extract_score(text, pattern=r"(\d+)/5")
+            correctness_score *= 20
         else:
-            correctness_score = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
+            correctness_score, match = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
         # confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
         confidence_score = 0
         return correctness_score, confidence_score
@@ -618,18 +665,22 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
                                  dataset_name="asqa",
                                  temperature=0.6,
                                  num_return_sequences=10,
-                                 five_pnt=True, n_doc=0, **kwargs):
+                                 five_pnt=True, n_doc=0,
+                                 oracle_doc=False,
+                                 **kwargs):
         if five_pnt:
-            if n_doc > 0:
+            if n_doc > 0 or oracle_doc:
                 inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name,
                                   n_doc=n_doc).generate_text_input(
-                    question=question, answer=answer, task_type="self_eval_doc", eval_item=kwargs["eval_item"],)
+                    question=question, answer=answer, task_type="self_eval_doc", eval_item=kwargs["eval_item"],
+                    oracle_doc=oracle_doc)
             else:
                 inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
                     question=question, answer=answer, task_type="self_eval")
 
         else:
             raise NotImplementedError
+        # print(inputs)
         outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
         scores = []
         output = {"inputs_self_eval": inputs}

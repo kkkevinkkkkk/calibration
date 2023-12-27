@@ -20,7 +20,7 @@ def make_doc_prompt(doc, doc_id, doc_prompt, use_shorter=None):
         text = doc[use_shorter]
     return doc_prompt.replace("{T}", doc["title"]).replace("{P}", text).replace("{ID}", str(doc_id+1))
 
-def get_shorter_text(item, docs, ndoc, key):
+def get_shorter_text(eval_item, docs, ndoc, key):
     doc_list = []
     for item_id, item in enumerate(docs):
         if key not in item:
@@ -43,7 +43,8 @@ def make_demo(item, template,
               doc_prompt=None,
               instruction=None,
               use_shorter=None,
-              test=False):
+              test=False,
+              oracle_doc=False,):
     # For demo template
     # - {INST}: the instruction
     # - {D}: the documents
@@ -58,10 +59,21 @@ def make_demo(item, template,
     else:
         prompt = template.replace("{INST}", instruction).replace("{Q}", item['question'])
     if "{D}" in prompt:
+        if oracle_doc and test:
+            n_doc = float("inf")
         if n_doc == 0:
             prompt = prompt.replace("{D}\n", "") # if there is no doc we also delete the empty line
         else:
-            doc_list = get_shorter_text(item, item["docs"], n_doc, use_shorter) if use_shorter is not None else item["docs"][:n_doc]
+            if test and oracle_doc:
+                assert "qa_pairs" in item
+                doc_list = []
+                for qa_pair_id, qa_pair in enumerate(item["qa_pairs"]):
+                    if qa_pair["context"] != "No context provided":
+                        doc_list.append({'text': qa_pair["context"], 'title': qa_pair["wikipage"]})
+                use_shorter = None
+                print(f"There are {len(doc_list)} oracle documents in this question.")
+            else:
+                doc_list = get_shorter_text(item, item["docs"], n_doc, use_shorter) if use_shorter is not None else item["docs"][:n_doc]
             text = "".join([make_doc_prompt(doc, doc_id, doc_prompt, use_shorter=use_shorter) for doc_id, doc in enumerate(doc_list)])
             prompt = prompt.replace("{D}", text)
 

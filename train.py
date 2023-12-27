@@ -1,23 +1,18 @@
 from omegaconf import OmegaConf
 import fire
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report
 import torch
 from transformers import TrainingArguments, Trainer, BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
-from transformers import EarlyStoppingCallback
 import numpy as np
 import pandas as pd
-from pipeline import MyPipeline, OPENAI_MODELS, pipeline_init
-from copy import deepcopy
-from transformers.trainer_callback import TrainerCallback
+
 import os
 import wandb
 from peft import LoraConfig, PeftModel
 from trl import SFTTrainer
-from transformers import pipeline
-import re
+
+
 from accelerate import Accelerator
-from utils import TEMPLATES
 from datasets import Dataset
 from prompter import Prompter
 
@@ -104,6 +99,7 @@ def main(
         seed=conf.seed,
         load_best_model_at_end=True,
         logging_dir='./logs',
+        logging_steps=10,
         run_name=conf.version,
         report_to="wandb",
         warmup_steps=conf.get("warmup_steps", 0),
@@ -123,17 +119,6 @@ def main(
     )
 
     trainer.train()
-
-    # pipe = pipeline_init(
-    #     task="text-generation",
-    #     model=model,
-    #     torch_dtype=torch.float16,
-    #     device_map="auto",
-    #     pipeline_class=MyPipeline,
-    #     model_name=model_name,
-    #     tokenizer=tokenizer,
-    # )
-
     save_dir = os.path.join(save_dir, "checkpoint-final")
     print(f"Saving last checkpoint of the model to {save_dir}")
     trainer.model.save_pretrained(save_dir)

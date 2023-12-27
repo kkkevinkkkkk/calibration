@@ -100,13 +100,14 @@ def main(
                         use_shorter=args.use_shorter,
                         dataset_name=args.dataset_name,
                         model_name=args.model,
+                         oracle_doc=args.get("oracle_doc", False),
                         )
 
 
     for idx, eval_item in tqdm(enumerate(eval_data)):
         text_input = prompter_.generate_text_input(task_type="main",
-                                                  eval_item=eval_item,
-                                                  )
+                                                   eval_item=eval_item,)
+
         eval_data[idx]['text_input'] = text_input
 
         if idx == 0:
@@ -134,6 +135,7 @@ def main(
                                                               other_answers=other_answers,
                                                               eval_item=eval_item,
                                                               n_doc=0 if not do_n_doc else args.n_doc,
+                                                              oracle_doc=args.get("oracle_doc", False),
                                                               )
         eval_item.update(confidence_output)
 

@@ -1,4 +1,4 @@
-RESULT_PATH="./results/run/asqa/Llama-2-13b-chat-hf_predictions_500.json"
+RESULT_PATH="./results/run/asqa/Llama-2-7b-chat-hf_predictions_1.json"
 
 echo "$RESULT_PATH"
 if echo "$RESULT_PATH" | grep -q "asqa"; then

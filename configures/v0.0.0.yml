@@ -9,8 +9,7 @@ model: meta-llama/Llama-2-7b-chat-hf
 confidence_method: ""
 
 dataset_name: asqa
-prompt_file: templates/asqa_closedbook.json
-eval_file: ./datasets/acle/asqa_eval_gtr_top100.json
+eval_file: ./datasets/asqa_eval_gtr_top100.json
 save_dir: ./
 sample_num: 1
 num_return_sequences: 1
