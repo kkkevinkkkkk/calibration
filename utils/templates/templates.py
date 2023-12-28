@@ -158,6 +158,28 @@ template_choose_entities = '''To validate the answer to "{question}", which {ent
 Choose the top 5 important entities from the options above. 
 If you think Number is the most important, Location is the second important, Organization is the third, Event is the fourth, and Date_and_times is the last, then your answer should be "Number, Location, Organization, Event, Date_and_times"'''
 
+template_self_eval_summ = '''You will be given one summary written for a news article.
+
+Your task is to rate the overall quality of the summary with a score from 1 to 5, where 1 is the lowest and 5 is the highest.
+
+Please make sure you read and understand these instructions carefully. Please keep this document open while reviewing, and refer to it as needed.
+
+Evaluation Steps:
+1. Read the news article carefully and identify the main topic and key points.
+2. Read the summary and compare it to the news article. Check if the summary covers the main topic and key points of the news article, and if it presents them in a clear and logical order.
+3. Assign a score for the summary quality on a scale of 1 to 5, where 1 is the lowest and 5 is the highest.
+
+Task Input:
+News Article:
+{article}
+Summary:
+{summary}
+
+Now please provide your score of the summary in the format of "Score: <Your score>/5" and give your explanation.
+'''  # following the template in G-Eval (https://arxiv.org/pdf/2303.16634.pdf)
+
+template_eval_summ = template_self_eval_summ
+
 TEMPLATE_LLAMA2_CHAT = '''<s>[INST] {task_instruction} [/INST]'''
 TEMPLATES = {
     "eval_categorical": template_eval_categorical,
@@ -172,4 +194,6 @@ TEMPLATES = {
     "self_eval_range": template_self_eval_range,
     "choose_entities": template_choose_entities,
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
+    "eval_summ": template_eval_summ,
+    "self_eval_summ": template_self_eval_summ,
 }
