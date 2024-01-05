@@ -348,10 +348,21 @@ qampari = {
     ]
 }
 
+cnndm = {
+    "instruction": "Summarize the provided article in three sentences. Please give the summary directly without any other response.",
+    "eval_instruction": "",  # Included in the prompt template.
+    "criterion": "",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "",
+    "doc_prompt": "Article: {P}\n",
+    "demos": []  # Usually, we perform 0-shot generation/evaluation on this dataset.
+}
+
 DATASET_PROFILES = {
     "asqa": asqa,
     "eli5": eli5,
     "qampari": qampari,
+    "cnndm": cnndm
 }
 TASK_PROFILES = DATASET_PROFILES
-DATASET_NAMES = ["asqa", "eli5", "qampari"]
+DATASET_NAMES = ["asqa", "eli5", "qampari", "cnndm"]
