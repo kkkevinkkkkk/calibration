@@ -7,7 +7,7 @@ import openai
 import os
 import re
 from retry import retry
-from openai.error import Timeout, APIError, ServiceUnavailableError
+from openai.error import Timeout, APIError, ServiceUnavailableError, InvalidRequestError
 from omegaconf import DictConfig
 from nltk.corpus import stopwords
 from nltk import sent_tokenize
@@ -190,7 +190,7 @@ class MyPipeline(TextGenerationPipeline):
 
         return records
 
-    @retry((Timeout, APIError, ServiceUnavailableError), tries=50, delay=1, backoff=6, max_delay=300)
+    @retry((Timeout, APIError, ServiceUnavailableError, InvalidRequestError), tries=50, delay=1, backoff=6, max_delay=300)
     def get_openai_completion(self, prompt, temperature=1.0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
         model_name = model_name if model_name is not None else self.model_name
@@ -336,7 +336,7 @@ class EvaluationPipeline(MyPipeline):
                         use_examples=True, five_pnt=False, temperature=0,
                         **kwargs):
         inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
-            question=question, answer=answer, reference_answer=gold_answer, task_type="eval")
+            question=question, answer=answer, reference_answer=gold_answer, task_type="eval", **kwargs)
 
         outputs = self.__call__(inputs, temperature=temperature, **kwargs)
         comment = outputs[0]["generated_text"]
@@ -414,10 +414,19 @@ class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def process_error_answer(self, answer):
+        self.error_fragment = "It's worth noting that there were other climbers who were part of the expedition and survived, including guide guide"
+        if self.error_fragment in answer:
+            answer = answer.split(self.error_fragment)[0]
+        return answer
+
     def evaluate_repetition(self, answer1, answer2, question=None, **kwargs):
+        answer1 = self.process_error_answer(answer1)
+        answer2 = self.process_error_answer(answer2)
         sentences = sent_tokenize(answer1)
         sentences_hit = []
         prompter_ = Prompter(model_name="openai")
+
         for sentence in sentences:
             inputs = prompter_.generate_text_input(sentence=sentence, response=answer2, task_type="repetition_split")
             outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
@@ -469,14 +478,18 @@ class SelfRepetitionClaimPipeline(SelfRepetitionPipeline):
         claim_labels = []
         claim_cnt = 0
         prompter_ = Prompter(model_name="openai")
-
-        for sentence in sentences:
+        # print(answer1)
+        # print("answer 1 length:", len(answer1.split()))
+        # print(answer2)
+        # print("answer 2 length:", len(answer2.split()))
+        for i, sentence in enumerate(sentences):
             claim_label = self.claim_detector(sentence)[0]["label"]
 
             if "NFS" not in claim_label:
                 claim_cnt += 1
                 inputs = prompter_.generate_text_input(sentence=sentence, response=answer2, task_type="repetition_split")
-
+                word_num = len(sentence.split())
+                # print(f"the {i} sentence has {word_num} words")
                 outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
                 comment = outputs[0]["generated_text"]
                 if "yes" in comment.lower():
@@ -659,6 +672,9 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
             correctness_score, match = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
         # confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
         confidence_score = 0
+        if correctness_score > 100:
+            print("Warning!!! correctness_score > 100", text)
+            correctness_score = 100
         return correctness_score, confidence_score
 
     def extract_confidence_score(self, answer, question,
@@ -681,7 +697,12 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
         else:
             raise NotImplementedError
         # print(inputs)
-        outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
+        outputs = self.__call__(inputs,
+                                num_return_sequences=num_return_sequences,
+                                do_sample=True,
+                                top_k=10,
+                                max_new_tokens=2048,
+                                temperature=temperature)
         scores = []
         output = {"inputs_self_eval": inputs}
         for i in range(num_return_sequences):

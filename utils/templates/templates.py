@@ -42,7 +42,7 @@ Think about it carefully. Answer yes or no and then justify your answer
 '''
 
 
-template_repetition = '''You will be presented with a question followed by two answers. Evaluate how similar these answers are, considering their amount of information provided, factual content, effectiveness in addressing the question, format and organization. Conclude by providing a similarity score between 0 and 5.
+template_repetition = '''You will be presented with a question followed by two answers. Evaluate how similar these answers are, considering their amount of information provided, factual content, effectiveness in addressing the question, format and organization. Conclude by providing an integer similarity score between 0 and 5.
 
 Question: {question}
 
@@ -82,6 +82,22 @@ Answer: {answer}
 Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.
 '''
 
+template_self_eval_categorical_examples_vicuna = '''{task_instruction}
+
+You will be given a question, and a student's answer. Please evaluate the student's answer, and provide a score from 0-5 to the student's answer based on the following scoring criterion:
+
+{criterion}
+
+Here are some examples.
+
+{examples}
+
+Question: {question}
+
+Answer: {answer}
+
+Comment:'''
+
 template_self_eval_categorical_examples_doc = '''{task_instruction}
 
 You will be given a question, relevant documents for reference, and a student's answer. Please evaluate the student's answer, and provide a score from 0-5 to the student's answer based on the following scoring criterion:
@@ -115,6 +131,7 @@ Answer: {answer}
 
 Now please provide your score about this answer in the format of "Score: <Your score>/5" and give your explanation. Assess for both factual accuracy and relevance to the question.
 '''
+
 
 template_self_eval_range = '''Please evaluate the student's answer to the question, and provide a score from 0-5 to the student's answer. Assess for both factual accuracy and relevance to the question. Following are the scoring criterion:
 
@@ -160,25 +177,74 @@ If you think Number is the most important, Location is the second important, Org
 
 template_self_eval_summ = '''You will be given one summary written for a news article.
 
-Your task is to rate the overall quality of the summary with a score from 1 to 5, where 1 is the lowest and 5 is the highest.
+Your task is to rate the overall quality of the summary with a score from 0 to 5, where 0 is the lowest and 5 is the highest.
 
 Please make sure you read and understand these instructions carefully. Please keep this document open while reviewing, and refer to it as needed.
 
 Evaluation Steps:
 1. Read the news article carefully and identify the main topic and key points.
 2. Read the summary and compare it to the news article. Check if the summary covers the main topic and key points of the news article, and if it presents them in a clear and logical order.
-3. Assign a score for the summary quality on a scale of 1 to 5, where 1 is the lowest and 5 is the highest.
+3. Assign a score for the summary quality on a scale of 0 to 5, where 0 is the lowest and 5 is the highest.
+
+Here are some examples.
+
+{examples}
+
+Now it's your turn.
 
 Task Input:
-News Article:
+Article:
 {article}
+
 Summary:
 {summary}
 
 Now please provide your score of the summary in the format of "Score: <Your score>/5" and give your explanation.
 '''  # following the template in G-Eval (https://arxiv.org/pdf/2303.16634.pdf)
+template_self_eval_summ_vicuna = '''You will be given one summary written for a news article.
 
-template_eval_summ = template_self_eval_summ
+Your task is to rate the overall quality of the summary with a score from 0 to 5, where 0 is the lowest and 5 is the highest.
+
+Please make sure you read and understand these instructions carefully. Please keep this document open while reviewing, and refer to it as needed.
+
+Evaluation Steps:
+1. Read the news article carefully and identify the main topic and key points.
+2. Read the summary and compare it to the news article. Check if the summary covers the main topic and key points of the news article, and if it presents them in a clear and logical order.
+3. Assign a score for the summary quality on a scale of 0 to 5, where 0 is the lowest and 5 is the highest.
+
+Here are some examples.
+
+{examples}
+
+
+Article:
+{article}
+
+Summary:
+{summary}
+
+Comment:'''  # following the template in G-Eval (https://arxiv.org/pdf/2303.16634.pdf)
+
+template_eval_summ = '''You will be given one summary written for a news article.
+
+Your task is to rate the overall quality of the summary with a score from 0 to 5, where 0 is the lowest and 5 is the highest.
+
+Please make sure you read and understand these instructions carefully. Please keep this document open while reviewing, and refer to it as needed.
+
+Evaluation Steps:
+1. Read the news article carefully and identify the main topic and key points.
+2. Read the summary and compare it to the news article. Check if the summary covers the main topic and key points of the news article, and if it presents them in a clear and logical order.
+3. Assign a score for the summary quality on a scale of 0 to 5, where 0 is the lowest and 5 is the highest.
+
+Task Input:
+Article:
+{article}
+
+Summary:
+{summary}
+
+Now please provide your score of the summary in the format of "Score: <Your score>/5" and give your explanation.
+'''  # following the template in G-Eval (https://arxiv.org/pdf/2303.16634.pdf)
 
 TEMPLATE_LLAMA2_CHAT = '''<s>[INST] {task_instruction} [/INST]'''
 TEMPLATES = {
@@ -189,11 +255,13 @@ TEMPLATES = {
     "repetition": template_repetition,
     "repetition_split": template_repetition_split,
     "self_eval_categorical_examples": template_self_eval_categorical_examples,
+    "self_eval_categorical_examples_vicuna": template_self_eval_categorical_examples_vicuna,
     "self_eval_categorical_examples_doc": template_self_eval_categorical_examples_doc,
     "self_eval_categorical": template_self_eval_categorical,
     "self_eval_range": template_self_eval_range,
     "choose_entities": template_choose_entities,
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
     "eval_summ": template_eval_summ,
+    "self_eval_summ_vicuna": template_self_eval_summ_vicuna,
     "self_eval_summ": template_self_eval_summ,
 }

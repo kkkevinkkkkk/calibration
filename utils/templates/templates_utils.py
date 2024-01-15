@@ -18,7 +18,11 @@ def make_doc_prompt(doc, doc_id, doc_prompt, use_shorter=None):
     text = doc['text']
     if use_shorter is not None:
         text = doc[use_shorter]
-    return doc_prompt.replace("{T}", doc["title"]).replace("{P}", text).replace("{ID}", str(doc_id+1))
+    if "title" in doc:
+        doc_prompt = doc_prompt.replace("{T}", doc["title"]).replace("{P}", text).replace("{ID}", str(doc_id+1))
+    else:
+        doc_prompt = doc_prompt.replace("{T}", "").replace("{P}", text).replace("{ID}", str(doc_id+1))
+    return doc_prompt
 
 def get_shorter_text(eval_item, docs, ndoc, key):
     doc_list = []
@@ -53,11 +57,22 @@ def make_demo(item, template,
     # ndoc: number of documents to put in context
     # use_shorter: None, "summary", or "extraction"
 
-    if instruction is None:
-        prompt = template.replace('{INST}\n\n', "")
-        prompt = prompt.replace("{Q}", item['question'])
+    # qa dataset
+    if "{Q}" in template:
+        assert "question" in item
+        if instruction is None:
+            prompt = template.replace('{INST}\n\n', "")
+
+            prompt = prompt.replace("{Q}", item['question'])
+        else:
+            prompt = template.replace("{INST}", instruction).replace("{Q}", item['question'])
+    # summary dataset
     else:
-        prompt = template.replace("{INST}", instruction).replace("{Q}", item['question'])
+        if instruction is None:
+            prompt = template.replace('{INST}\n\n', "")
+        else:
+            prompt = template.replace("{INST}", instruction)
+
     if "{D}" in prompt:
         if oracle_doc and test:
             n_doc = float("inf")
@@ -93,6 +108,7 @@ def make_head_prompt(prompt_data: dict,
                      fewer_doc_in_demo: bool = False,
                      no_doc_in_demo: bool = True,
                      use_shorter: str = "summary",
+                     post_demo_instruction: str = "Now let's answer:\n\n",
                      ):
     train_ids = np.random.choice(len(prompt_data["demos"]), n_shot, replace=False)
     head_prompt = prompt_data["instruction"] + "\n\n"
@@ -113,7 +129,7 @@ def make_head_prompt(prompt_data: dict,
         )
         head_prompt += prompt_data["demo_sep"]
 
-    head_prompt += "Now let's answer:\n\n"
+    head_prompt += post_demo_instruction
     return head_prompt
 
 

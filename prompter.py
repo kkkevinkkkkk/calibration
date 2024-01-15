@@ -25,16 +25,19 @@ class Prompter:
         self.oracle_doc = oracle_doc
 
         self.head_prompt = None
-
-    def generate_main_task_input(self, eval_item=None):
+        self.summarization_datasets = ["cnndm"]
+    def generate_main_task_input(self, eval_item=None, dataset_name=None):
         if self.head_prompt is None:
+            post_demo_instruction = "Now let's answer:\n\n" if dataset_name not in self.summarization_datasets else ""
             self.head_prompt = make_head_prompt(self.prompt_data,
                                                 n_shot=self.n_shot,
                                                 n_doc=self.n_doc,
                                                 n_doc_in_demo=self.n_doc_in_demo,
                                                 fewer_doc_in_demo=self.fewer_doc_in_demo,
                                                 no_doc_in_demo=self.no_doc_in_demo,
-                                                use_shorter=self.use_shorter, )
+                                                use_shorter=self.use_shorter,
+                                                post_demo_instruction=post_demo_instruction,
+                                                )
 
         text_input = self.head_prompt + make_demo(eval_item,
                                                   n_doc=self.n_doc,
@@ -52,35 +55,77 @@ class Prompter:
         dataset_profile = DATASET_PROFILES[dataset_name] if dataset_name in DATASET_PROFILES else None
         if task_type == "main":
             assert "eval_item" in kwargs
-            text_input = self.generate_main_task_input(eval_item=kwargs["eval_item"])
+            text_input = self.generate_main_task_input(eval_item=kwargs["eval_item"], dataset_name=dataset_name)
             if "chat" in self.model_name:
-                text_input = text_input.rstrip("Answer:")
+                if dataset_name in self.summarization_datasets:
+                    text_input = text_input.rstrip("Summary:")
+                else:
+                    text_input = text_input.rstrip("Answer:")
 
 
         elif task_type == "self_eval":
             assert "question" in kwargs and "answer" in kwargs
+            if dataset_name in self.summarization_datasets:
+                if self.model_name in ["vicuna-13b-v1.3"]:
+                    text_input = TEMPLATES["self_eval_summ_vicuna"].format(
+                        article=kwargs["eval_item"]["article"],
+                        summary=kwargs["eval_item"]["summary"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                    )
+                else:
+                    text_input = TEMPLATES["self_eval_summ"].format(
+                        article=kwargs["eval_item"]["article"],
+                        summary=kwargs["eval_item"]["summary"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                    )
+            else:
+                if self.model_name in ["vicuna-13b-v1.3"]:
+                    text_input = TEMPLATES["self_eval_categorical_examples_vicuna"].format(
+                        task_instruction=dataset_profile["eval_instruction"],
+                        criterion=dataset_profile["criterion"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                        question=kwargs["question"],
+                        answer=kwargs["answer"],
+                    )
+                else:
+                    text_input = TEMPLATES["self_eval_categorical_examples"].format(
+                        task_instruction=dataset_profile["eval_instruction"],
+                        criterion=dataset_profile["criterion"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                        question=kwargs["question"],
+                        answer=kwargs["answer"],
+                    )
 
-            text_input = TEMPLATES["self_eval_categorical_examples"].format(
-                task_instruction=dataset_profile["eval_instruction"],
-                criterion=dataset_profile["criterion"],
-                examples=dataset_profile["eval_examples_categorical"],
-                question=kwargs["question"],
-                answer=kwargs["answer"],
-            )
         elif task_type == "self_eval_doc":
             assert "eval_item" in kwargs and "question" in kwargs and "answer" in kwargs and "oracle_doc" in kwargs
-            doc_prompt = "Document [{ID}](Title: {T}): {P}\n"
-            doc_text = make_demo(kwargs["eval_item"], template="{D}\n",
-                                 n_doc=self.n_doc, doc_prompt=doc_prompt,
-                                 oracle_doc=kwargs["oracle_doc"], test=True)
-            text_input = TEMPLATES["self_eval_categorical_examples_doc"].format(
-                task_instruction=dataset_profile["eval_instruction"],
-                criterion=dataset_profile["criterion"],
-                examples=dataset_profile["eval_examples_categorical"],
-                question=kwargs["question"],
-                documents=doc_text,
-                answer=kwargs["answer"],
-            )
+            if dataset_name in self.summarization_datasets:
+                if self.model_name in ["vicuna-13b-v1.3"]:
+                    text_input = TEMPLATES["self_eval_summ_vicuna"].format(
+                        article=kwargs["eval_item"]["article"],
+                        summary=kwargs["eval_item"]["summary"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                    )
+                else:
+                    text_input = TEMPLATES["self_eval_summ"].format(
+                        article=kwargs["eval_item"]["article"],
+                        summary=kwargs["eval_item"]["summary"],
+                        examples=dataset_profile["eval_examples_categorical"],
+                    )
+            else:
+                doc_prompt = dataset_profile["doc_prompt"] \
+                    if dataset_profile is not None else "Document [{ID}](Title: {T}): {P}\n"
+
+                doc_text = make_demo(kwargs["eval_item"], template="{D}\n",
+                                     n_doc=self.n_doc, doc_prompt=doc_prompt,
+                                     oracle_doc=kwargs["oracle_doc"], test=True)
+                text_input = TEMPLATES["self_eval_categorical_examples_doc"].format(
+                    task_instruction=dataset_profile["eval_instruction"],
+                    criterion=dataset_profile["criterion"],
+                    examples=dataset_profile["eval_examples_categorical"],
+                    question=kwargs["question"],
+                    documents=doc_text,
+                    answer=kwargs["answer"],
+                )
 
 
         elif task_type == "self_eval_range":
@@ -93,16 +138,24 @@ class Prompter:
                 question=kwargs["question"],
                 answer=kwargs["answer"],
             )
+
         elif task_type == "eval":
             assert "question" in kwargs and "answer" in kwargs and "reference_answer" in kwargs
-            text_input = TEMPLATES["eval_categorical_examples"].format(
-                task_instruction=dataset_profile["eval_instruction"],
-                criterion=dataset_profile["criterion"],
-                examples=dataset_profile["eval_examples_categorical"],
-                question=kwargs["question"],
-                answer=kwargs["answer"],
-                reference_answer=kwargs["reference_answer"],
-            )
+            if dataset_name in self.summarization_datasets:
+                text_input = TEMPLATES["eval_summ"].format(
+                    article=kwargs["eval_item"]["article"],
+                    summary=kwargs["eval_item"]["summary"],
+                )
+            else:
+                text_input = TEMPLATES["eval_categorical_examples"].format(
+                    task_instruction=dataset_profile["eval_instruction"],
+                    criterion=dataset_profile["criterion"],
+                    examples=dataset_profile["eval_examples_categorical"],
+                    question=kwargs["question"],
+                    answer=kwargs["answer"],
+                    reference_answer=kwargs["reference_answer"],
+                )
+
         elif task_type == "repetition":
             assert "question" in kwargs and "answer1" in kwargs and "answer2" in kwargs
             text_input = TEMPLATES["repetition"].format(
@@ -137,7 +190,7 @@ class Prompter:
         else:
             raise NotImplementedError
 
-        if "chat" in self.model_name or self.model_name in ["5.0.1"]:
+        if "chat" in self.model_name or self.model_name.startswith("5"):
             text_input = TEMPLATES["llama2_chat"].format(task_instruction=text_input)
 
         return text_input

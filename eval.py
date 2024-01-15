@@ -282,7 +282,10 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
     for item in tqdm(data):
         local_scores, local_fact_scores = [], []
         for t in range(generation_times):
-            question, gold_answer, answer = item["question"], item["answer"], item["output"]
+            question = item["question"] if "question" in item else None
+            gold_answer = item["answer"] if "answer" in item else None
+            answer = item["output"] if "output" in item else None
+
             outputs = pipeline.evaluate_answer(question=question,
                                                gold_answer=gold_answer,
                                                answer=answer,
@@ -290,6 +293,7 @@ def compute_gpt_score(data, model_name="gpt-3.5-turbo",
                                                temperature=temperature,
                                                use_examples=use_examples,
                                                five_pnt=five_pnt,
+                                               eval_item=item,
                                                )
 
             item[f"{model_name}_comment_{t}"] = outputs["comment"]
@@ -625,6 +629,8 @@ def main():
         dataset_name = "asqa"
     elif "qampari" in args.f:
         dataset_name = "qampari"
+    elif "cnndm" in args.f:
+        dataset_name = "cnndm"
     else:
         raise NotImplementedError
 

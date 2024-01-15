@@ -150,11 +150,16 @@ def read_predictions_and_results(
         confidence_method="self_eval_repetition",
         model_name="Llama-2-13b-chat-hf",
         path="/usr/xtmp/yh386/calibration/results",
-        sample_num=100):
+        sample_num=100,
+        sample_start=None,
+):
     # trained_model = True if model_name.startswith('5')  else False
     trained_model = True if confidence_method.endswith("trained") else False
     if trained_model and confidence_method == "self_eval_repetition":
         confidence_method = "self_eval_repetition_trained"
+    sample_end = sample_start + sample_num if sample_start is not None else sample_num
+    sample_num_str = f"{sample_start}_{sample_end}" if sample_start is not None else f"{sample_num}"
+
     predictions_path_template = "{confidence_method}/{dataset_name}/{model_name}_predictions_{sample_num}.json"
 
     final_metric = "gpt-4_score"
@@ -165,6 +170,8 @@ def read_predictions_and_results(
     elif dataset_name == "qampari":
         task_metric = "qampari_f1_top5"
         final_metric = task_metric
+    elif dataset_name == "cnndm":
+        task_metric = ""
     else:
         raise NotImplementedError
     if model_name == "gpt-4":
@@ -172,27 +179,39 @@ def read_predictions_and_results(
     predictions_path = predictions_path_template.format(confidence_method=confidence_method,
                                                         dataset_name=dataset_name,
                                                         model_name=model_name,
-                                                        sample_num=sample_num)
+                                                        sample_num=sample_num_str)
     predictions_path = os.path.join(path, predictions_path)
 
+    result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
     if trained_model:
-        result_path_template = predictions_path_template.replace("{confidence_method}", confidence_method)
+        # result_path_template = predictions_path_template.replace("{confidence_method}", confidence_method)
+        result_exp_name = "run"
+        model_name = "Llama-2-13b-chat-hf"
+
     else:
         result_exp_name = "run" if "gpt" not in model_name else confidence_method
         if dataset_name == "qampari":
             result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.qampari.score"
+
         elif confidence_method .endswith("_3shot_3doc"):
             confidence_method = confidence_method.replace("_3shot_3doc", "")
             result_path_template = "run_3shot_3doc/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+            if "gpt" in model_name:
+                result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
         elif confidence_method .endswith("_oracle_doc"):
             confidence_method = confidence_method.replace("_oracle_doc", "")
             result_path_template = "run_oracle_doc/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+            if "gpt" in model_name:
+                result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
         else:
-            result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+            if task_metric == "":
+                result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.gpt-4_five_pnt_t:0.7.score"
+            else:
+                result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
     result_path = result_path_template.format(dataset_name=dataset_name,
-                                                model_name=model_name,
-                                                task_metric=task_metric,
-                                                sample_num=sample_num,
+                                              model_name=model_name,
+                                              task_metric=task_metric,
+                                              sample_num=sample_num_str,
                                               exp_name=result_exp_name)
     result_path = os.path.join(path, result_path)
 
@@ -219,14 +238,12 @@ def read_predictions_and_results(
     with open(result_path, 'r') as f:
         print(f"load result from {result_path}")
         data_w_scores = json.load(f)
-        if trained_model:
-            scores = {}
-            data = data_w_scores
-        else:
-            scores = {k: v for k, v in data_w_scores.items() if k != "data"}
-            data = data_w_scores["data"]
+
+        scores = {k: v for k, v in data_w_scores.items() if k != "data"}
+        data = data_w_scores["data"]
 
     df_data = pd.DataFrame(data)
+    print(df_data.keys())
     if final_metric == "gpt-4_score":
         if "gpt-4_scores" not in df_data.columns:
             df_data["gpt-4_scores"] = df_data.apply(lambda row: [row[f'gpt-4_score_{i}'] for i in range(5)], axis=1)
@@ -279,23 +296,26 @@ def selective_answering_singular(scores, score_threshold=0.6):
         total_select.append(select)
     return total_select
 
-def selective_answering_analyze(df):
+def selective_answering_analyze(df, score_threshold=0.8, conf_threshold=0.8):
     df_distributed_calibration = []
-    for conf_threshold in [0.6, 0.8, 1.0]:
+    returned_precision, returned_f1 = 0, 0
+    for conf_t in [0.6, 0.8, 1.0]:
         l = {}
-        for score_threshold in [0.6, 0.8, 1.0]:
-            total_select = selective_answering_distributed(df["confidence_distribution"], conf_threshold,
-                                                           score_threshold)
+        for score_t in [0.4, 0.6, 0.8, 1.0]:
+            total_select = selective_answering_distributed(df["confidence_distribution"], conf_t,
+                                                           score_t)
             select_num, score = np.sum(total_select), np.mean((df[total_select]["correctness_score"]))
-            covered_num = np.sum(np.array(df["correctness_score"] >= score_threshold) & np.array(total_select))
-            total_num = np.sum(np.array(df["correctness_score"] >= score_threshold))
+            covered_num = np.sum(np.array(df["correctness_score"] >= score_t) & np.array(total_select))
+            total_num = np.sum(np.array(df["correctness_score"] >= score_t))
 
             precision = covered_num / select_num
             recall = covered_num / total_num
-            f1 = round(2 * precision * recall / (precision + recall), 2)
+            f1 = round(2 * precision * recall / (precision + recall), 3)
 
             result = f"{round(score, 2)}({covered_num}/{select_num})({covered_num}/{total_num})({f1})"
-            l[score_threshold] = result
+            l[score_t] = result
+            if score_t == score_threshold and conf_t == conf_threshold:
+                returned_precision, returned_f1 = round(precision, 3), round(f1, 3)
         # df_distributed_calibration[conf_threshold] = l
         df_distributed_calibration.append(l)
     df_distributed_calibration = pd.DataFrame(df_distributed_calibration)
@@ -303,26 +323,13 @@ def selective_answering_analyze(df):
     print(df_distributed_calibration)
     print()
 
-    # df_singular_calibration = [{}]
-    # for conf_threshold in [0.6, 0.8, 1.0]:
-    #     total_select = selective_answering_singular(df_pred["score"], conf_threshold)
-    #     select_num, score = np.sum(total_select), np.mean((df_data[total_select]["correctness_score"]))
-    #     covered_num = np.sum(np.array(df_data["correctness_score"] >= 100 * conf_threshold) & np.array(total_select))
-    #     total_num = np.sum(np.array(df_data["correctness_score"] >= 100 * conf_threshold))
-    #     precision = covered_num / select_num
-    #     recall = covered_num / total_num
-    #     f1 = round(2 * precision * recall / (precision + recall), 2)
-    #     result = f"{round(score, 2)}({covered_num}/{select_num})({covered_num}/{total_num})({f1})"
-    #     df_singular_calibration[0][conf_threshold] = result
-    # df_singular_calibration = pd.DataFrame(df_singular_calibration)
-    # print(df_singular_calibration)
-    # print()
+    return {"precision": returned_precision, "f1": returned_f1}
 
 
 
 def analyze(
-        df):
-    selective_answering_analyze(df)
+        df, score_threshold=0.8, conf_threshold=0.8):
+    result = selective_answering_analyze(df, score_threshold=score_threshold, conf_threshold=conf_threshold)
     # score_columns = ["gpt-4_score"]
     score_columns = ["correctness_score"]
 
@@ -340,18 +347,20 @@ def analyze(
 
     print()
     print("wasserstein_distance similarity")
-    print(round(np.mean(similarity_scores), 2))
-
+    print(round(np.mean(similarity_scores), 3))
+    wasserstein_similarity = round(np.mean(similarity_scores), 3)
     print()
     print("ece score")
-    print(round(np.mean(np.abs(confidence - correctness)), 2))
+    print(round(np.mean(np.abs(confidence - correctness)), 3))
     print("ece score l2")
-    print(round(np.mean(np.square(confidence - correctness)), 2))
+    print(round(np.mean(np.square(confidence - correctness)), 3))
 
-    df_score = pd.concat([df[score_columns], df["score"]], axis=1)
+    # df_score = pd.concat([df[score_columns], df["confidence_score"]], axis=1)
+    df_score = pd.concat([df["correctness_score"], df["score"]], axis=1)
     print("correlation")
     print(df_score.corr())
     print()
+    correlation = df_score.corr().iloc[0, 1]
 
 
     slope, intercept, r_value, p_value, std_err = stats.linregress(correctness, confidence)
@@ -360,6 +369,10 @@ def analyze(
     plt.xlabel("correctness")
     plt.ylabel("confidence")
 
-    return similarity_scores
+    result["wasserstein_similarity"] = wasserstein_similarity
+    result["ece"] = round(np.mean(np.abs(confidence - correctness)), 3)
+    result["correlation"] = correlation
+
+    return result
 
 

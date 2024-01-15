@@ -7,7 +7,7 @@ import json
 import numpy as np
 
 from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,
-                      SelfEvalPipeline, SelfEvalRepetitionPipeline, SelfEvalRangePipeline,
+                      SelfEvalRepetitionPipeline, SelfEvalRangePipeline,
                       SelfVerificationPipeline,
                       SelfRepetitionPipeline, SelfRepetitionSplitPipeline,
                       SelfRepetitionNERPipeline, SelfRepetitionClaimPipeline,
@@ -44,7 +44,7 @@ def main(
     confidence_to_pipeline = {
         "": MyPipeline,
         "self_verification": SelfVerificationPipeline,
-        "self_eval": SelfEvalPipeline,
+        # "self_eval": SelfEvalPipeline,
         "self_eval_repetition": SelfEvalRepetitionPipeline,
         "self_eval_range": SelfEvalRangePipeline,
         "log_prob": MyPipeline,
@@ -103,7 +103,6 @@ def main(
                          oracle_doc=args.get("oracle_doc", False),
                         )
 
-
     for idx, eval_item in tqdm(enumerate(eval_data)):
         text_input = prompter_.generate_text_input(task_type="main",
                                                    eval_item=eval_item,)
@@ -119,7 +118,8 @@ def main(
                 top_k=10,
                 num_return_sequences=num_return_sequences,
                 eos_token_id=eos_token_id,
-                max_length=2048,
+                # max_length=2048,
+                max_new_tokens=2048,
                 random_state=args.seed
             )
 
@@ -130,7 +130,7 @@ def main(
             other_answers = None
 
         confidence_output = pipeline.extract_confidence_score(answer=eval_item["generated_text"],
-                                                              question=eval_item["question"],
+                                                              question=eval_item["question"] if "question" in eval_item else None,
                                                               dataset_name=args.dataset_name,
                                                               other_answers=other_answers,
                                                               eval_item=eval_item,
