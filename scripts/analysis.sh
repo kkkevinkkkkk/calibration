@@ -1,26 +1,10 @@
-RESULT_PATH="./results/run/asqa/Llama-2-7b-chat-hf_predictions_5.json"
+DATASET_NAME="asqa"
+MODEL_NAME="Llama-2-7b-chat-hf"
 
-echo "$RESULT_PATH"
-if echo "$RESULT_PATH" | grep -q "asqa"; then
-  echo "dataset is asqa"
-  python eval.py --f "$RESULT_PATH" --qa --gpt4_five_pnt
-elif echo "$RESULT_PATH" | grep -q "eli5"; then
-  echo "dataset is eli5"
-  python eval.py --f "$RESULT_PATH" --claims_nli --gpt4_five_pnt
-elif echo "$RESULT_PATH" | grep -q "qampari"; then
-  echo "dataset is qampari"
-  if echo "$RESULT_PATH" | grep -q "chat"; then
-    echo "model is llama2-chat"
-    python eval.py --f "$RESULT_PATH" --cot
-  else
-    echo "model not chat version"
-    python eval.py --f "$RESULT_PATH"
-  fi
-elif echo "$RESULT_PATH" | grep -q "cnndm"; then
-  echo "dataset is cnndm"
-  python eval.py --f "$RESULT_PATH" --gpt4_five_pnt
-else
-  echo "dataset is unknown"
-fi
+CONFIDENCE_METHOD="self_eval_repetition"
+#CONFIDENCE_METHOD="self_repetition_claim"
 
+SAMPLE_NUM=5
+RESULT_DIR="./results"
+python analysis.py --result_dir $RESULT_DIR --dataset_name $DATASET_NAME --model_name $MODEL_NAME --confidence_method $CONFIDENCE_METHOD --sample_num $SAMPLE_NUM
 

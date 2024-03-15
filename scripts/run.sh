@@ -10,7 +10,7 @@
 #SBATCH --error=log/tmp.err      # file to collect standard errors
 
 
-CONFIG_NAME='v1.2.1'
+CONFIG_NAME='v0.0.0'
 
 if [ $# -eq 1 ]; then
     CONFIG_NAME=$1
