@@ -1,12 +1,13 @@
 # extract confidence score
-version: 0.0.0
+version: 0.2.0
 
 seed: 1
 
-exp_name: run
+exp_name: self_eval_repetition
+#model: lmsys/vicuna-13b-v1.3
 model: meta-llama/Llama-2-7b-chat-hf
 
-confidence_method: ""
+confidence_method: self_eval_repetition
 
 dataset_name: asqa
 eval_file: ./datasets/asqa_eval_examples.json

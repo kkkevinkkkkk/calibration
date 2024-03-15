@@ -657,13 +657,13 @@ def main():
     if args.gpt3_5_five_pnt:
         temperature = 1
         result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name, five_pnt=True, temperature=temperature, generation_times=5))
-        metrics.append(f"gpt-3.5_five_pnt_t:{temperature}")
+        metrics.append(f"gpt-3.5_five_pnt_t={temperature}")
     if args.gpt4:
         result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name, model_name="gpt-4", generation_times=1))
         metrics.append("gpt-4")
     if args.gpt4_five_pnt:
         temperature = 0.7
-        generation_times = 1
+        generation_times = 3
         result.update(compute_gpt_score(normalized_data, dataset_name=dataset_name,
                                         model_name="gpt-4", five_pnt=True,
                                         temperature=temperature, generation_times=generation_times))

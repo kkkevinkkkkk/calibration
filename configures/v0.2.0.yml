@@ -1,0 +1,26 @@
+# extract confidence score
+version: 2.9.1
+
+seed: 1
+
+exp_name: self_repetition_claim
+
+model: meta-llama/Llama-2-13b-chat-hf
+
+confidence_method: self_repetition_claim
+
+dataset_name: asqa
+prompt_file: templates/asqa_closedbook.json
+eval_file: /usr/xtmp/yh386/datasets/acle/asqa_eval_gtr_top100.json
+save_dir: /usr/xtmp/yh386/calibration
+sample_num: 500
+num_return_sequences: 10
+
+n_shot: 3
+n_doc: 0
+n_doc_in_demo: 0
+no_doc_in_demo: true
+fewer_doc_in_demo: false
+use_shorter: summary
+
+
