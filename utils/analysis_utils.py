@@ -127,7 +127,8 @@ def extract_confidence_distribution(scores, category_num=6):
     confidence_distribution = [round(confidence_distribution[i], 3)for i in range(category_num)]
     return confidence_distribution
 
-def extract_confidence_distribution_lambda(row, confidence_method="self_eval_repetition"):
+
+def extract_confidence_scores_lambda(row, confidence_method="self_eval_repetition"):
     if confidence_method.startswith("self_eval_repetition"):
         scores = row["scores_self_eval"]
     elif confidence_method == "self_repetition":
@@ -139,10 +140,16 @@ def extract_confidence_distribution_lambda(row, confidence_method="self_eval_rep
         # scores = row['scores_f1']
     elif confidence_method == "self_repetition_claim":
         scores = row['scores_repetition_claim']
+    elif confidence_method == "self_verification":
+        scores = row['scores_self_verification']
     else:
         scores = [row["seq_log_prob"]]
         # print("use seq_log_prob as confidence score")
         # raise NotImplementedError
+    return scores
+
+def extract_confidence_distribution_lambda(row, confidence_method="self_eval_repetition"):
+    scores = extract_confidence_scores_lambda(row, confidence_method)
     return extract_confidence_distribution(scores)
 
 def read_predictions_and_results(
@@ -155,8 +162,12 @@ def read_predictions_and_results(
 ):
     sample_end = sample_start + sample_num if sample_start is not None else sample_num
     sample_num_str = f"{sample_start}_{sample_end}" if sample_start is not None else f"{sample_num}"
+    temperature = None
 
     predictions_path_template = "{confidence_method}/{dataset_name}/{model_name}_predictions_{sample_num}.json"
+    if temperature is not None:
+        predictions_path_template = "{confidence_method}/{dataset_name}/{model_name}_predictions_{sample_num}_t:{temperature}.json"
+        predictions_path_template = predictions_path_template.replace("{temperature}", str(temperature))
 
     final_metric = "gpt-4_score"
     if dataset_name == "asqa":
@@ -179,10 +190,28 @@ def read_predictions_and_results(
     predictions_path = os.path.join(result_dir, predictions_path)
 
     result_exp_name = "run" if "gpt" not in model_name else confidence_method
+    if "gpt" in model_name and confidence_method == "self_verification":
+        result_exp_name = "self_eval_repetition"
 
     # for qampari, we use the task metric instead of gpt-4 score as  correctness score
     if dataset_name == "qampari":
         result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.qampari.score"
+        if temperature is not None:
+            result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}_t:{temperature}.json.qampari.score"
+            result_path_template = result_path_template.replace("{temperature}", str(temperature))
+
+    elif confidence_method.endswith("_3shot_3doc"):
+        confidence_method = confidence_method.replace("_3shot_3doc", "")
+        result_path_template = "run_3shot_3doc/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+        if "gpt" in model_name:
+            result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+
+    elif confidence_method.endswith("_oracle_doc"):
+        confidence_method = confidence_method.replace("_oracle_doc", "")
+        result_path_template = "run_oracle_doc/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+        if "gpt" in model_name:
+            result_path_template = "{exp_name}/{dataset_name}/{model_name}_predictions_{sample_num}.json.{task_metric}_gpt-4_five_pnt_t:0.7.score"
+
     # for other dataset, we use gpt-4 score as correctness score
     else:
         if task_metric == "":
@@ -239,6 +268,9 @@ def merge_predictions_and_results(
         df_data["correctness_distribution"] = df_data.apply(
             lambda row: extract_confidence_distribution([row[final_metric] * 100]), axis=1)
 
+    df_pred["confidence_scores"] = df_pred.apply(
+        lambda row: extract_confidence_scores_lambda(row, confidence_method),
+        axis=1)
     df_pred["confidence_distribution"] = df_pred.apply(
         lambda row: extract_confidence_distribution_lambda(row, confidence_method),
         axis=1)
@@ -256,6 +288,7 @@ def merge_predictions_and_results(
         "self_eval_repetition": "score_self_eval",
         "self_eval_range": "score",
         "self_eval_repetition_trained": "score_self_eval",
+        "self_verification": "score_self_verification",
     }
     assert score_column_map[confidence_method] in df_pred.columns
     df_pred = df_pred.rename(columns={score_column_map[confidence_method]: "confidence_score"})
@@ -321,6 +354,13 @@ def selective_answering_analyze(df, score_threshold=0.8, conf_threshold=0.8):
 
     return {f"precision_{round(score_threshold, 1)}": returned_precision, f"f1_{round(score_threshold, 1)}": returned_f1}
 
+def calculate_wasserstein_similarity_func(row, category_num=6):
+    distribution1 = row["confidence_distribution"]
+    distribution2 = row["correctness_distribution"]
+    distance = wasserstein_distance(range(category_num), range(category_num), distribution1, distribution2) / (category_num - 1)
+    similarity = 1 - distance
+    return similarity
+
 
 def analyze(
         df, score_threshold=0.8, conf_threshold=0.8):
@@ -344,9 +384,52 @@ def analyze(
     df_score = pd.concat([df["correctness_score"], df["confidence_score"]], axis=1)
     correlation = df_score.corr().iloc[0, 1]
 
+    ece_scores = calculate_ece_scores_multi_level(df)
+
     result["wasserstein_similarity"] = round(wasserstein_similarity, 3)
     result["correlation"] = round(correlation, 3)
+    result["ECE-M"] = ece_scores
 
     return result
 
+def calculate_ece_score(confidence_scores, correctness_scores, n_bins=10):
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    bin_boundaries[-1] += 1e-4
+    ece_score = 0.0
+    total_sample = len(confidence_scores)
+    total_props = 0
+    for bin_idx in range(n_bins):
+        bin_mask = (confidence_scores >= bin_boundaries[bin_idx]) & (confidence_scores < bin_boundaries[bin_idx + 1])
+        bin_confidence_scores = confidence_scores[bin_mask]
+        bin_correctness_scores = correctness_scores[bin_mask]
+        if len(bin_confidence_scores) == 0:
+            continue
+        bin_prop = len(bin_confidence_scores) / total_sample
+        total_props += bin_prop
+        bin_err = np.abs(np.mean(bin_correctness_scores) - np.mean(bin_confidence_scores))
+        ece_score += bin_err * bin_prop
+    return ece_score
 
+def calculate_ece_scores_multi_level(df, n_bins=10):
+    ece_scores = []
+    nums = []
+    for score_level in range(6):
+        confidence_scores = np.array([conf_dist[score_level] for conf_dist in df["confidence_distribution"]])
+        correctness_scores = np.array([dist[score_level] for dist in df["correctness_distribution"]])
+        num = correctness_scores.sum()
+        ece_score = calculate_ece_score(confidence_scores, correctness_scores, n_bins=n_bins)
+        nums.append(num)
+        ece_scores.append(ece_score)
+        # print(score_level, ece_score)
+    # print(nums)
+    # print([num * ece for num, ece in zip(nums, ece_scores)])
+    weighted_ece_scores = np.array([num * ece for num, ece in zip(nums, ece_scores)]) / np.sum(nums)
+    weights = np.array(nums) / np.sum(nums)
+    print("weights:", [round(w, 3) for w in weights])
+    print("ece scores", [round(ece, 3) for ece in ece_scores])
+    # print("weighted_ece_scores", weighted_ece_scores)
+
+    weighted_ece = np.sum([num * ece for num, ece in zip(nums, ece_scores)]) / np.sum(nums)
+    print("average ece score:", np.mean(ece_scores), "std:", np.std(ece_scores))
+    print("weighted ece score:", weighted_ece)
+    return weighted_ece

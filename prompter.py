@@ -187,6 +187,30 @@ class Prompter:
                 question=kwargs["question"],
                 rephrase_num=kwargs["rephrase_num"],
             )
+        elif task_type == "self_verification":
+            assert "question" in kwargs and "answer" in kwargs
+            text_input = TEMPLATES["self_verification"].format(
+                question=kwargs["question"],
+                answer=kwargs["answer"],
+            )
+            if dataset_name in self.summarization_datasets:
+                text_input = TEMPLATES["self_verification_summ"].format(
+                    doc=kwargs["eval_item"]["article"],
+                    summary=kwargs["eval_item"]["summary"],
+                )
+
+            if "vicuna" in self.model_name:
+                text_input = TEMPLATES["self_verification_examples"].format(
+                    question=kwargs["question"],
+                    answer=kwargs["answer"],
+                    examples=dataset_profile["verification_examples"],
+                )
+                if dataset_name in self.summarization_datasets:
+                    text_input = TEMPLATES["self_verification_examples_summ"].format(
+                        doc=kwargs["eval_item"]["article"],
+                        summary=kwargs["eval_item"]["summary"],
+                        examples=dataset_profile["verification_examples"],
+                    )
         else:
             raise NotImplementedError
 

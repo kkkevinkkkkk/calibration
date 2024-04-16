@@ -724,28 +724,46 @@ class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
         for score in scores:
             confidence_distribution[int(score // score_interval)] += 1 / len(scores)
         return confidence_distribution
-class SelfVerificationPipeline(SelfRepetitionPipeline):
+
+class SelfVerificationPipeline(SelfEvalRepetitionPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def extract_score(text, pattern=r"(\d+)/100"):
+        correct_words = ["true"]
+        if any(word in text.lower() for word in correct_words):
+            score = 1
+        else:
+            score = 0
+        return score, None
+
 
     def extract_confidence_score(self, answer, question,
                                  dataset_name="asqa",
                                  temperature=0.6,
                                  num_return_sequences=10,
                                  **kwargs):
-        inputs = None
-        raise NotImplementedError
+        inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
+            question=question, answer=answer, task_type="self_verification", eval_item=kwargs["eval_item"] )
 
-        outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
+        outputs = self.__call__(inputs,
+                                num_return_sequences=num_return_sequences,
+                                do_sample=True,
+                                top_k=10,
+                                max_new_tokens=100,
+                                temperature=temperature)
         scores = []
         comments = []
         output = {"inputs_self_verification": inputs}
         for i in range(num_return_sequences):
             comment = outputs[i]["generated_text"]
-            scores.append(1 if "true" in comment.lower() else 0)
+            scores.append(self.extract_score(comment)[0] * 100)
             comments.append(comment)
 
-        output["score_self_verification"] = np.mean(scores) * 100
+        output["score_self_verification"] = np.mean(scores)
+        output["scores_self_verification"] = scores
+        output["confidence_distribution"] = self.extract_confidence_distribution(scores)
         return output
 
 class RephraseConsistencyPipeline(MyPipeline):

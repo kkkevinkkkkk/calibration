@@ -245,6 +245,52 @@ Summary:
 
 Now please provide your score of the summary in the format of "Score: <Your score>/5" and give your explanation.
 '''  # following the template in G-Eval (https://arxiv.org/pdf/2303.16634.pdf)
+template_self_verification = ''''You will be given a question and your own answer to the question. Please verify if the answer is correct or not.
+
+Question: {question}
+
+Answer: {answer}
+
+Now please determine whether the answer is true or false. Return "True" if the answer is correct, and "False" if the answer is incorrect.'''
+
+template_self_verification_examples = '''You will be given a question and your own answer to the question. Please verify if the answer is correct or not.
+
+Here are some examples.
+
+{examples}
+
+Now please determine whether the answer is true or false. Return "True" if the answer is correct, and "False" if the answer is incorrect.
+
+
+Question: {question}
+
+Answer: {answer}
+
+Correctness:'''
+
+template_self_verification_summ = ''''You will be given a document and your own summary. Please verify if the summary is correct or not.
+
+Document: {doc}
+
+Summary: {summary}
+
+Now please determine whether the summary is true or false. Return "True" if the summary is correct, and "False" if the summary is incorrect.'''
+
+
+template_self_verification_examples_summ = '''You will be given a document and your own summary. Please verify if the summary is correct or not.
+
+Here are some examples.
+
+{examples}
+
+Now please determine whether the summary is true or false. Return "True" if the summary is correct, and "False" if the summary is incorrect.
+
+Document: {doc}
+
+Summary: {summary}
+
+Correctness:'''
+
 
 TEMPLATE_LLAMA2_CHAT = '''<s>[INST] {task_instruction} [/INST]'''
 TEMPLATES = {
@@ -264,4 +310,8 @@ TEMPLATES = {
     "eval_summ": template_eval_summ,
     "self_eval_summ_vicuna": template_self_eval_summ_vicuna,
     "self_eval_summ": template_self_eval_summ,
+    "self_verification": template_self_verification,
+    "self_verification_examples": template_self_verification_examples,
+    "self_verification_summ": template_self_verification_summ,
+    "self_verification_examples_summ": template_self_verification_examples_summ,
 }
